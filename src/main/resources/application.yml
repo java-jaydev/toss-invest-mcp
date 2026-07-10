@@ -1,0 +1,26 @@
+spring:
+  main:
+    web-application-type: none
+    banner-mode: "off"
+  ai:
+    mcp:
+      server:
+        name: toss-invest-mcp
+        version: 0.1.0
+        instructions: >-
+          토스증권 공식 Open API(https://openapi.tossinvest.com) 기반 MCP 서버.
+          공식 API만 사용하며(비공식 WTS 미사용), 기본은 read-only 입니다.
+        stdio: true
+
+toss:
+  base-url: https://openapi.tossinvest.com
+  client-id: ${TOSS_CLIENT_ID:}
+  client-secret: ${TOSS_CLIENT_SECRET:}
+  account: ${TOSS_ACCOUNT:}
+
+# stdio 전송은 stdout을 MCP 프로토콜 채널로 쓰므로, 콘솔 로그를 끄고 파일로만 남긴다.
+logging:
+  threshold:
+    console: "OFF"
+  file:
+    name: ./logs/toss-mcp.log
