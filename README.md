@@ -17,7 +17,7 @@ AI coding agents are great at reasoning but blind to live market data. `toss-inv
 
 ## Features
 
-- ✅ **Current price** (`get_price`) — real-time quote by symbol
+- ✅ **Market data (read-only)** — `get_prices` (quotes, up to 200 symbols), `get_orderbook`, `get_trades`, `get_candles` (1m/1d), `get_stocks` (instrument info). Parameters verified against the official OpenAPI spec.
 - 🔒 OAuth2 client-credentials with automatic token caching & refresh
 - 🔑 Secrets via environment variables only (never committed)
 - 🗺️ **Roadmap**: more read-only market-data tools → HTTP (Streamable) transport → caching + request-coalescing → load-tested for concurrency (see [Roadmap](#roadmap))
@@ -79,7 +79,7 @@ AI Agent (Claude Code / Cursor / …)
 
 | Phase | Goal |
 |---|---|
-| 1 | Expand read-only tools: orderbook, candles, trades, stock search |
+| 1 ✅ | Read-only market-data tools: prices, orderbook, trades, candles, stocks — **done** |
 | 2 | HTTP (Streamable) transport + caching + request-coalescing in front of the rate-limited upstream |
 | 3 | Load testing (k6) + observability (Micrometer / Prometheus / Grafana) with published throughput & latency numbers |
 | 4 | Account & order tools behind explicit opt-in safety gates (dry-run → confirm) |
