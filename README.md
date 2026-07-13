@@ -80,9 +80,36 @@ AI Agent (Claude Code / Cursor / …)
 | Phase | Goal |
 |---|---|
 | 1 ✅ | Read-only market-data tools: prices, orderbook, trades, candles, stocks — **done** |
-| 2 | HTTP (Streamable) transport + caching + request-coalescing in front of the rate-limited upstream |
+| 2 ✅ | Two-tier cache (Caffeine L1 + Redis L2) + per-node single-flight coalescing in front of the rate-limited upstream — **done** |
+| 2.5 | HTTP (Streamable) transport (WebMVC) alongside stdio — enables load testing |
 | 3 | Load testing (k6) + observability (Micrometer / Prometheus / Grafana) with published throughput & latency numbers |
 | 4 | Account & order tools behind explicit opt-in safety gates (dry-run → confirm) |
+
+## Caching
+
+Read-only market-data calls pass through a two-tier cache so bursts of identical
+requests collapse to at most one upstream call:
+
+- **L1 — Caffeine near-cache** (in-process, 2s): `get(key, loader)` is atomic per
+  key, so concurrent identical requests on a node are single-flighted to one load.
+- **L2 — Redis shared cache** (opt-in): per-data-type TTLs — quotes/orderbook 2s,
+  trades 3s, intraday candles 10s, daily candles 1h, stock info 6h. Any Redis
+  error degrades to a cache miss; it never breaks a tool call.
+
+Cache keys normalize comma-separated symbols (trim + sort), so `005930,000660`
+and `000660,005930` share one entry.
+
+Enable L2 with env vars:
+
+```bash
+export TOSS_CACHE_L2=true
+export REDIS_HOST=localhost   # default
+export REDIS_PORT=6379        # default
+```
+
+Scope note: L1 single-flight is per-node. Cross-node request coalescing is not
+implemented; the shared L2 narrows (but does not eliminate) the concurrent-miss
+window when running multiple instances.
 
 ## Contributing
 
