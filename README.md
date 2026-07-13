@@ -20,7 +20,7 @@ AI coding agents are great at reasoning but blind to live market data. `toss-inv
 - ✅ **Market data (read-only)** — `get_prices` (quotes, up to 200 symbols), `get_orderbook`, `get_trades`, `get_candles` (1m/1d), `get_stocks` (instrument info). Parameters verified against the official OpenAPI spec.
 - 🔒 OAuth2 client-credentials with automatic token caching & refresh
 - 🔑 Secrets via environment variables only (never committed)
-- 🗺️ **Roadmap**: more read-only market-data tools → HTTP (Streamable) transport → caching + request-coalescing → load-tested for concurrency (see [Roadmap](#roadmap))
+- 🗺️ **Roadmap**: caching + request-coalescing (done) → HTTP (Streamable) transport → load testing for concurrency (see [Roadmap](#roadmap))
 
 ## Quickstart
 
