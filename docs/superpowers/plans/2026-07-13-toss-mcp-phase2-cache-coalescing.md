@@ -883,3 +883,261 @@ git commit -m "test(cache): verify DI wiring; docs: mark Phase 2 done and docume
 - The Redis IT (`RedisL2CacheIT`) needs Docker. Without Docker it self-skips (`disabledWithoutDocker = true`) — a skip is not a failure.
 - Do not touch `TossMcpApplication`, `TossAuthService`, or `TossProperties` signatures.
 - Commit messages: plain, no AI attribution (public OSS repo, author = Jinkyu Lee).
+
+---
+
+### Task 5: L1 honors per-type TTL (variable expiry) + Redis enabled-path wiring test
+
+**Rationale:** Final whole-branch review (Important #1). With L2 disabled (the default stdio deployment), the fixed-2s L1 made the per-type TTLs inert — slow-changing data (stock info 6h, daily candles 1h) was re-fetched every 2s. Make L1 honor the caller's per-type TTL via Caffeine variable expiry, so a single node caches correctly without Redis; L2 then adds cross-instance sharing. Also closes the Docker-less coverage gap on the L2-enabled wiring path (Important #2 mitigation).
+
+**Files:**
+- Modify: `src/main/java/dev/jaydev/tossmcp/cache/MarketDataCache.java`
+- Test: `src/test/java/dev/jaydev/tossmcp/cache/MarketDataCacheTtlTest.java` (create)
+- Test: `src/test/java/dev/jaydev/tossmcp/cache/CacheWiringTest.java` (add one case)
+- Modify: `README.md` (Caching section)
+
+**Interfaces:**
+- The public constructor `MarketDataCache(L2Cache l2)` MUST remain (Spring + `MarketDataService` use it). Add a package-private `MarketDataCache(L2Cache l2, com.github.benmanes.caffeine.cache.Ticker ticker)` for time-controlled tests; the public one delegates with `Ticker.systemTicker()`. `get(String, Duration, Supplier<String>)` signature is unchanged. Existing `MarketDataCacheTest` (60s TTL, immediate calls) must stay green.
+
+- [ ] **Step 1: Write the failing per-type-TTL test**
+
+Create `src/test/java/dev/jaydev/tossmcp/cache/MarketDataCacheTtlTest.java`:
+
+```java
+package dev.jaydev.tossmcp.cache;
+
+import com.github.benmanes.caffeine.cache.Ticker;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+class MarketDataCacheTtlTest {
+
+    /** 테스트에서 시간을 수동으로 전진시키는 Caffeine ticker. */
+    static final class ManualTicker implements Ticker {
+        private long nanos = 0L;
+        @Override public long read() { return nanos; }
+        void advance(Duration d) { nanos += d.toNanos(); }
+    }
+
+    @Test
+    void shortTtlEntryExpiresAtItsOwnTtl() {
+        ManualTicker ticker = new ManualTicker();
+        AtomicInteger loads = new AtomicInteger();
+        Supplier<String> loader = () -> { loads.incrementAndGet(); return "V"; };
+        MarketDataCache cache = new MarketDataCache(new NoOpL2Cache(), ticker);
+
+        cache.get("k", Duration.ofSeconds(2), loader);
+        ticker.advance(Duration.ofSeconds(1));
+        cache.get("k", Duration.ofSeconds(2), loader);   // 1s < 2s → 캐시 히트
+        assertEquals(1, loads.get());
+
+        ticker.advance(Duration.ofSeconds(2));           // 누적 3s > 2s → 만료
+        cache.get("k", Duration.ofSeconds(2), loader);
+        assertEquals(2, loads.get());
+    }
+
+    @Test
+    void longTtlEntryIsCachedWithoutRedis() {
+        ManualTicker ticker = new ManualTicker();
+        AtomicInteger loads = new AtomicInteger();
+        Supplier<String> loader = () -> { loads.incrementAndGet(); return "V"; };
+        MarketDataCache cache = new MarketDataCache(new NoOpL2Cache(), ticker);
+
+        cache.get("stocks:X", Duration.ofHours(6), loader);
+        ticker.advance(Duration.ofMinutes(30));
+        cache.get("stocks:X", Duration.ofHours(6), loader);  // 30m < 6h → L2 없이도 캐시
+        assertEquals(1, loads.get(), "6h TTL 항목은 30분 뒤에도 L1 캐시 (Redis 불필요)");
+
+        ticker.advance(Duration.ofHours(7));                 // > 6h → 만료
+        cache.get("stocks:X", Duration.ofHours(6), loader);
+        assertEquals(2, loads.get());
+    }
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `./gradlew test --tests "dev.jaydev.tossmcp.cache.MarketDataCacheTtlTest"`
+Expected: FAIL — compile error, no `MarketDataCache(L2Cache, Ticker)` constructor.
+
+- [ ] **Step 3: Rewrite `MarketDataCache` with variable expiry**
+
+Replace the whole body of `src/main/java/dev/jaydev/tossmcp/cache/MarketDataCache.java` with:
+
+```java
+package dev.jaydev.tossmcp.cache;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
+import com.github.benmanes.caffeine.cache.Ticker;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.Optional;
+import java.util.function.Supplier;
+
+/**
+ * 2계층 캐시 + 요청병합.
+ * L1(Caffeine): get(key, loader) 가 키 단위 원자 실행이라 동일 키 동시요청을
+ * single-flight 로 병합한다. 각 항목은 호출자가 지정한 타입별 TTL 로 만료되므로,
+ * Redis 없이도 종목정보 6h·분봉 10s 등 의도대로 캐시된다.
+ * L2(공유 캐시, opt-in): L1 미스 시 조회, 미스면 upstream 호출 후 L2 적재.
+ * 여러 인스턴스로 확장하면 L2 가 노드 간 캐시를 공유한다.
+ */
+@Component
+public class MarketDataCache {
+
+    private static final int L1_MAX_SIZE = 10_000;
+
+    private final Cache<String, Entry> l1;
+    private final L2Cache l2;
+
+    public MarketDataCache(L2Cache l2) {
+        this(l2, Ticker.systemTicker());
+    }
+
+    MarketDataCache(L2Cache l2, Ticker ticker) {
+        this.l2 = l2;
+        this.l1 = Caffeine.newBuilder()
+                .maximumSize(L1_MAX_SIZE)
+                .ticker(ticker)
+                .expireAfter(new TtlExpiry())
+                .build();
+    }
+
+    /** L1(타입별 TTL, single-flight) → L2(공유) → upstream 순으로 해석. */
+    public String get(String key, Duration ttl, Supplier<String> upstream) {
+        Entry entry = l1.get(key, k -> {
+            String value = l2GetOrLoad(k, ttl, upstream);
+            return value == null ? null : new Entry(value, ttl);
+        });
+        return entry == null ? null : entry.value();
+    }
+
+    private String l2GetOrLoad(String key, Duration ttl, Supplier<String> upstream) {
+        Optional<String> hit = l2.get(key);
+        if (hit.isPresent()) {
+            return hit.get();
+        }
+        String value = upstream.get();
+        if (value != null) {
+            l2.put(key, value, ttl);
+        }
+        return value;
+    }
+
+    /** L1 캐시 항목: 값 + 그 값의 만료 기준 TTL. */
+    private record Entry(String value, Duration ttl) {
+    }
+
+    /** 항목별 TTL 을 그대로 적용하는 가변 만료(쓰기 기준, 읽기로 연장하지 않음). */
+    private static final class TtlExpiry implements Expiry<String, Entry> {
+        @Override
+        public long expireAfterCreate(String key, Entry entry, long currentTime) {
+            return entry.ttl().toNanos();
+        }
+
+        @Override
+        public long expireAfterUpdate(String key, Entry entry, long currentTime, long currentDuration) {
+            return entry.ttl().toNanos();
+        }
+
+        @Override
+        public long expireAfterRead(String key, Entry entry, long currentTime, long currentDuration) {
+            return currentDuration;
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Run to verify the TTL test passes**
+
+Run: `./gradlew test --tests "dev.jaydev.tossmcp.cache.MarketDataCacheTtlTest"`
+Expected: PASS (2 tests).
+
+- [ ] **Step 5: Add the L2-enabled wiring case**
+
+In `src/test/java/dev/jaydev/tossmcp/cache/CacheWiringTest.java`, add these imports if absent:
+
+```java
+import org.mockito.Mockito;
+import org.springframework.data.redis.core.StringRedisTemplate;
+```
+
+and add this test method to the class:
+
+```java
+    @Test
+    void l2EnabledWiresRedisL2Cache() {
+        runner
+                .withBean(StringRedisTemplate.class, () -> Mockito.mock(StringRedisTemplate.class))
+                .withPropertyValues("toss.cache.l2.enabled=true")
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(L2Cache.class);
+                    assertThat(ctx.getBean(L2Cache.class)).isInstanceOf(RedisL2Cache.class);
+                });
+    }
+```
+
+(If the existing `runner` field is `private final`, this works as-is since we only chain `.withBean(...)`/`.withPropertyValues(...)` onto it, producing a new runner without mutating the field.)
+
+- [ ] **Step 6: Run to verify wiring tests pass**
+
+Run: `./gradlew test --tests "dev.jaydev.tossmcp.cache.CacheWiringTest"`
+Expected: PASS (3 tests: the 2 existing + the new enabled-path case).
+
+- [ ] **Step 7: Update the README Caching section**
+
+In `README.md`, replace the `## Caching` section body (the two bullets describing L1/L2 and the TTL list) so it reads:
+
+```markdown
+## Caching
+
+Read-only market-data calls pass through a cache so bursts of identical
+requests collapse to at most one upstream call, and slow-changing data is not
+re-fetched from the rate-limited upstream on every request:
+
+- **L1 — Caffeine (in-process):** `get(key, loader)` is atomic per key, so
+  concurrent identical requests on a node are single-flighted to one load.
+  Each entry expires at its per-type TTL, so a single node caches correctly
+  **without Redis**.
+- **Per-type TTLs:** quotes/orderbook 2s, trades 3s, intraday candles 10s,
+  daily candles 1h, stock info 6h.
+- **L2 — Redis (opt-in, shared):** the same entries in a shared cache, so
+  multiple instances share cache state and a cold node warms instantly. Any
+  Redis error degrades to a cache miss — it never breaks a tool call.
+
+Cache keys normalize comma-separated symbols (trim + sort), so `005930,000660`
+and `000660,005930` share one entry.
+
+Enable L2 with env vars:
+
+```bash
+export TOSS_CACHE_L2=true
+export REDIS_HOST=localhost   # default
+export REDIS_PORT=6379        # default
+```
+
+Scope note: L1 single-flight is per-node. Cross-node request coalescing is not
+implemented; the shared L2 narrows (but does not eliminate) the concurrent-miss
+window when running multiple instances. The Redis L2 path is covered by
+`RedisL2CacheIT` (Testcontainers), which requires Docker to run.
+```
+
+(Keep normal triple-backtick fences; do not paste any zero-width characters.)
+
+- [ ] **Step 8: Run the full suite and commit**
+
+Run: `./gradlew test`
+Expected: PASS — all prior tests green (incl. Task 1's `MarketDataCacheTest`), 2 new TTL tests, 3 wiring tests; Redis IT skips without Docker.
+
+```bash
+git add src/main/java/dev/jaydev/tossmcp/cache/MarketDataCache.java src/test/java/dev/jaydev/tossmcp/cache/MarketDataCacheTtlTest.java src/test/java/dev/jaydev/tossmcp/cache/CacheWiringTest.java README.md
+git commit -m "feat(cache): L1 honors per-type TTL via variable expiry; test L2-enabled wiring"
+```
