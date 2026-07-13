@@ -31,8 +31,12 @@ dependencies {
     implementation 'org.springframework:spring-web'
     // L1 near-cache (single-flight via Caffeine's atomic get(key, loader))
     implementation 'com.github.ben-manes.caffeine:caffeine'
+    // L2 shared cache
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }
 
 tasks.named('test') {

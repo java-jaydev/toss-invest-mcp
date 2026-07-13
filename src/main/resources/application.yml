@@ -2,6 +2,10 @@ spring:
   main:
     web-application-type: none
     banner-mode: "off"
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   ai:
     mcp:
       server:
@@ -17,6 +21,9 @@ toss:
   client-id: ${TOSS_CLIENT_ID:}
   client-secret: ${TOSS_CLIENT_SECRET:}
   account: ${TOSS_ACCOUNT:}
+  cache:
+    l2:
+      enabled: ${TOSS_CACHE_L2:false}
 
 # stdio 전송은 stdout을 MCP 프로토콜 채널로 쓰므로, 콘솔 로그를 끄고 파일로만 남긴다.
 logging:
