@@ -20,7 +20,7 @@ AI coding agents are great at reasoning but blind to live market data. `toss-inv
 - ✅ **Market data (read-only)** — `get_prices` (quotes, up to 200 symbols), `get_orderbook`, `get_trades`, `get_candles` (1m/1d), `get_stocks` (instrument info). Parameters verified against the official OpenAPI spec.
 - 🔒 OAuth2 client-credentials with automatic token caching & refresh
 - 🔑 Secrets via environment variables only (never committed)
-- 🗺️ **Roadmap**: more read-only market-data tools → HTTP (Streamable) transport → caching + request-coalescing → load-tested for concurrency (see [Roadmap](#roadmap))
+- 🗺️ **Roadmap**: caching + request-coalescing (done) → HTTP (Streamable) transport → load testing for concurrency (see [Roadmap](#roadmap))
 
 ## Quickstart
 
@@ -80,9 +80,42 @@ AI Agent (Claude Code / Cursor / …)
 | Phase | Goal |
 |---|---|
 | 1 ✅ | Read-only market-data tools: prices, orderbook, trades, candles, stocks — **done** |
-| 2 | HTTP (Streamable) transport + caching + request-coalescing in front of the rate-limited upstream |
+| 2 ✅ | Two-tier cache (Caffeine L1 + Redis L2) + per-node single-flight coalescing in front of the rate-limited upstream — **done** |
+| 2.5 | HTTP (Streamable) transport (WebMVC) alongside stdio — enables load testing |
 | 3 | Load testing (k6) + observability (Micrometer / Prometheus / Grafana) with published throughput & latency numbers |
 | 4 | Account & order tools behind explicit opt-in safety gates (dry-run → confirm) |
+
+## Caching
+
+Read-only market-data calls pass through a cache so bursts of identical
+requests collapse to at most one upstream call, and slow-changing data is not
+re-fetched from the rate-limited upstream on every request:
+
+- **L1 — Caffeine (in-process):** `get(key, loader)` is atomic per key, so
+  concurrent identical requests on a node are single-flighted to one load.
+  Each entry expires at its per-type TTL, so a single node caches correctly
+  **without Redis**.
+- **Per-type TTLs:** quotes/orderbook 2s, trades 3s, intraday candles 10s,
+  daily candles 1h, stock info 6h.
+- **L2 — Redis (opt-in, shared):** the same entries in a shared cache, so
+  multiple instances share cache state and a cold node warms instantly. Any
+  Redis error degrades to a cache miss — it never breaks a tool call.
+
+Cache keys normalize comma-separated symbols (trim + sort), so `005930,000660`
+and `000660,005930` share one entry.
+
+Enable L2 with env vars:
+
+```bash
+export TOSS_CACHE_L2=true
+export REDIS_HOST=localhost   # default
+export REDIS_PORT=6379        # default
+```
+
+Scope note: L1 single-flight is per-node. Cross-node request coalescing is not
+implemented; the shared L2 narrows (but does not eliminate) the concurrent-miss
+window when running multiple instances. The Redis L2 path is covered by
+`RedisL2CacheIT` (Testcontainers), which requires Docker to run.
 
 ## Contributing
 

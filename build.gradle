@@ -29,10 +29,21 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-json'
     implementation 'org.springframework:spring-web'
+    // L1 near-cache (single-flight via Caffeine's atomic get(key, loader))
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+    // L2 shared cache
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    // 어떤 테스트가 실제로 돌고 무엇이 스킵됐는지 CI 로그에 남긴다.
+    // RedisL2CacheIT 는 Docker 없는 환경에서 self-skip 하므로, 초록불만으로는 실행 여부를 알 수 없다.
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
 }
