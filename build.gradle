@@ -41,4 +41,9 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // 어떤 테스트가 실제로 돌고 무엇이 스킵됐는지 CI 로그에 남긴다.
+    // RedisL2CacheIT 는 Docker 없는 환경에서 self-skip 하므로, 초록불만으로는 실행 여부를 알 수 없다.
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
 }
