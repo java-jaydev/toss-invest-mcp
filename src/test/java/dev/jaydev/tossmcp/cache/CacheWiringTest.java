@@ -5,7 +5,9 @@ import dev.jaydev.tossmcp.config.TossProperties;
 import dev.jaydev.tossmcp.service.MarketDataService;
 import dev.jaydev.tossmcp.tools.MarketDataTools;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,5 +39,16 @@ class CacheWiringTest {
     void l2EnabledFlagIsHonoredAtConditionLevel() {
         runner.withPropertyValues("toss.cache.l2.enabled=false").run(ctx ->
                 assertThat(ctx.getBean(L2Cache.class)).isInstanceOf(NoOpL2Cache.class));
+    }
+
+    @Test
+    void l2EnabledWiresRedisL2Cache() {
+        runner
+                .withBean(StringRedisTemplate.class, () -> Mockito.mock(StringRedisTemplate.class))
+                .withPropertyValues("toss.cache.l2.enabled=true")
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(L2Cache.class);
+                    assertThat(ctx.getBean(L2Cache.class)).isInstanceOf(RedisL2Cache.class);
+                });
     }
 }

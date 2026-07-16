@@ -87,14 +87,19 @@ AI Agent (Claude Code / Cursor / …)
 
 ## Caching
 
-Read-only market-data calls pass through a two-tier cache so bursts of identical
-requests collapse to at most one upstream call:
+Read-only market-data calls pass through a cache so bursts of identical
+requests collapse to at most one upstream call, and slow-changing data is not
+re-fetched from the rate-limited upstream on every request:
 
-- **L1 — Caffeine near-cache** (in-process, 2s): `get(key, loader)` is atomic per
-  key, so concurrent identical requests on a node are single-flighted to one load.
-- **L2 — Redis shared cache** (opt-in): per-data-type TTLs — quotes/orderbook 2s,
-  trades 3s, intraday candles 10s, daily candles 1h, stock info 6h. Any Redis
-  error degrades to a cache miss; it never breaks a tool call.
+- **L1 — Caffeine (in-process):** `get(key, loader)` is atomic per key, so
+  concurrent identical requests on a node are single-flighted to one load.
+  Each entry expires at its per-type TTL, so a single node caches correctly
+  **without Redis**.
+- **Per-type TTLs:** quotes/orderbook 2s, trades 3s, intraday candles 10s,
+  daily candles 1h, stock info 6h.
+- **L2 — Redis (opt-in, shared):** the same entries in a shared cache, so
+  multiple instances share cache state and a cold node warms instantly. Any
+  Redis error degrades to a cache miss — it never breaks a tool call.
 
 Cache keys normalize comma-separated symbols (trim + sort), so `005930,000660`
 and `000660,005930` share one entry.
@@ -109,7 +114,8 @@ export REDIS_PORT=6379        # default
 
 Scope note: L1 single-flight is per-node. Cross-node request coalescing is not
 implemented; the shared L2 narrows (but does not eliminate) the concurrent-miss
-window when running multiple instances.
+window when running multiple instances. The Redis L2 path is covered by
+`RedisL2CacheIT` (Testcontainers), which requires Docker to run.
 
 ## Contributing
 
