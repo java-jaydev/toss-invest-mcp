@@ -1,0 +1,17 @@
+# stdio 전송: stdout 을 MCP 프로토콜 채널로 쓴다.
+# 배너·콘솔로그가 stdout 으로 새면 클라이언트의 JSON-RPC 파싱이 깨지므로
+# 웹 서버를 띄우지 않고 로그는 파일로만 남긴다.
+spring:
+  main:
+    web-application-type: none
+    banner-mode: "off"
+  ai:
+    mcp:
+      server:
+        stdio: true
+
+logging:
+  threshold:
+    console: "OFF"
+  file:
+    name: ./logs/toss-mcp.log

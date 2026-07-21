@@ -1,0 +1,19 @@
+# Streamable HTTP 전송(MCP 스펙 2025-03-26). SSE 는 이 스펙으로 대체됐다.
+# 톰캣 요청 처리를 가상스레드로 돌린다 — 토스 API 응답 대기(IO 바운드)에서
+# 플랫폼 스레드를 붙잡지 않으므로 동시 처리량이 크게 오른다.
+spring:
+  main:
+    web-application-type: servlet
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    mcp:
+      server:
+        stdio: false
+        protocol: STREAMABLE
+        streamable-http:
+          mcp-endpoint: /mcp
+
+server:
+  port: ${PORT:8080}

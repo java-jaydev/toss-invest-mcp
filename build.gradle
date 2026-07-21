@@ -24,11 +24,11 @@ dependencyManagement {
 }
 
 dependencies {
-    // MCP server (stdio) — Claude Code / Cursor / Codex / Hermes / OpenClaw 연결
-    implementation 'org.springframework.ai:spring-ai-starter-mcp-server'
-    implementation 'org.springframework.boot:spring-boot-starter'
+    // MCP server — 한 아티팩트로 stdio·Streamable HTTP 두 전송을 모두 서비스한다.
+    // webmvc 스타터가 stdio 오토컨피그(-common)를 전이 의존으로 품으므로 스타터 병기 불필요.
+    // 전송 선택은 Spring 프로파일(stdio / http)로 가른다.
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-json'
-    implementation 'org.springframework:spring-web'
     // L1 near-cache (single-flight via Caffeine's atomic get(key, loader))
     implementation 'com.github.ben-manes.caffeine:caffeine'
     // L2 shared cache
