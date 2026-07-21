@@ -459,10 +459,13 @@ git commit -m "test(transport): verify streamable HTTP handshake and tool call r
 
 ---
 
-## Task 4: 가상스레드 실측 검증
+## Task 4: 런타임 실측 검증 (가상스레드 + stdio 톰캣 미기동)
 
 **Files:**
 - Test: `src/test/java/dev/jaydev/tossmcp/transport/VirtualThreadProbeIT.java`
+- Test: `src/test/java/dev/jaydev/tossmcp/transport/StdioNoWebServerTest.java`
+
+**Task 2 리뷰에서 추가된 요구사항:** webmvc 스타터로 교체하면서 서블릿·톰캣 클래스가 **stdio 경로에도 클래스패스에 상주**하게 됐다. 교체 전에는 서블릿 클래스가 아예 없어서 웹 서버가 뜰 수 없었지만, 지금은 `application-stdio.yml`의 `web-application-type: none` **한 줄만이** 톰캣을 막는다. 이 줄이 사라지면 stdio 모드에서 톰캣이 뜨고 배너·로그가 stdout 으로 새어 MCP 프로토콜이 깨진다. `StdioProfileConfigTest` 는 YAML 문자열만 파싱하므로 이 회귀를 잡지 못한다. 실제 컨텍스트를 띄워 막는다.
 
 **Interfaces:**
 - Consumes: Task 2의 `http` 프로파일(`spring.threads.virtual.enabled=true`)
@@ -539,6 +542,58 @@ Expected: PASS, 응답이 `true:` 로 시작
 - [ ] **Step 3: 실패 시에만 수정**
 
 `false:` 가 나오면 설정이 안 먹은 것이다. 확인 순서: ① `Runtime.version().feature()` 가 21인가 ② `@ActiveProfiles("http")` 가 실제로 적용됐는가(`application-http.yml` 로딩 여부) ③ `spring.threads.virtual.enabled` 가 컨텍스트에 반영됐는가. **단언을 완화해 통과시키지 말 것.**
+
+- [ ] **Step 3b: stdio 모드에서 톰캣이 안 뜨는지 실제 컨텍스트로 검증**
+
+`src/test/java/dev/jaydev/tossmcp/transport/StdioNoWebServerTest.java`:
+
+```java
+package dev.jaydev.tossmcp.transport;
+
+import dev.jaydev.tossmcp.TossMcpApplication;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.web.server.WebServer;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.web.context.WebApplicationContext;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * webmvc 스타터로 교체한 뒤로 톰캣·서블릿 클래스가 stdio 경로에도 클래스패스에 상주한다.
+ * 이제 application-stdio.yml 의 web-application-type: none 한 줄만이 톰캣을 막는다.
+ * 그 줄이 사라지면 stdio 모드에서 배너·로그가 stdout 으로 새어 MCP 프로토콜이 깨진다.
+ * YAML 문자열 파싱으로는 이 회귀를 못 잡으므로 실제 컨텍스트를 띄워 확인한다.
+ */
+class StdioNoWebServerTest {
+
+    @Test
+    void defaultProfileStartsNoWebServer() {
+        SpringApplication app = new SpringApplication(TossMcpApplication.class);
+        try (ConfigurableApplicationContext ctx = app.run()) {
+            assertThat(ctx)
+                    .as("stdio 경로에서 웹 컨텍스트가 뜨면 stdout 이 오염된다")
+                    .isNotInstanceOf(WebApplicationContext.class);
+            assertThat(ctx.getBeanNamesForType(WebServer.class))
+                    .as("stdio 경로에 웹 서버 빈이 있으면 안 된다")
+                    .isEmpty();
+        }
+    }
+}
+```
+
+구현 시 주의:
+- 이 테스트는 실제 애플리케이션을 띄운다. stdio 전송이 `System.in` 을 읽는 스레드를 만들지만 데몬 스레드이고 컨텍스트를 닫으므로 테스트는 끝난다. 만약 실제로 멈춘다면 원인을 보고하고 **테스트를 지우지 말고** 상의할 것.
+- 토스 자격증명 없이 떠야 한다(`TossProperties` 기본값이 빈 문자열). 기동만 하고 API 호출은 하지 않는다.
+
+- [ ] **Step 3c: 이 테스트가 진짜 감시하는지 반증**
+
+`src/main/resources/application-stdio.yml` 에서 `web-application-type: none` 줄을 **임시로 지우고** 돌린다.
+
+Run: `./gradlew test --tests '*StdioNoWebServerTest*'`
+Expected: **FAIL** (톰캣이 뜨면서 웹 컨텍스트가 됨)
+
+실패를 확인했으면 지웠던 줄을 **반드시 원복**하고 다시 돌려 통과를 확인한다. 실패하지 않는다면 그 테스트는 아무것도 지키지 못하는 것이므로 그 사실을 보고할 것.
 
 - [ ] **Step 4: 통과 + 전체 회귀 확인**
 
