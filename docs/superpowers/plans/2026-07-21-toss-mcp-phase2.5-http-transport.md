@@ -532,12 +532,23 @@ class VirtualThreadProbeIT {
 
 먼저 가상스레드를 끈 상태로 돌려 이 테스트가 **실제로 실패하는지** 확인한다 — 항상 통과하는 테스트는 증거가 아니다.
 
-Run: `./gradlew test --tests '*VirtualThreadProbeIT*' -Dspring.threads.virtual.enabled=false`
+Run: `SPRING_THREADS_VIRTUAL_ENABLED=false ./gradlew test --tests '*VirtualThreadProbeIT*' --rerun-tasks`
+Expected: **FAIL**, 실제값이 `false:http-nio-auto-1-exec-1` 같은 플랫폼 스레드 이름
+
+> **함정 주의 — `-D` 로는 반증이 안 된다.**
+> `./gradlew ... -Dspring.threads.virtual.enabled=false` 형태는 **Gradle JVM 에만** 걸리고
+> 포크된 테스트 JVM 으로 전달되지 않는다(`build.gradle` 의 test 태스크에 `systemProperties`
+> 전달 설정이 없다). 그래서 이 형태로 돌리면 설정이 꺼지지 않은 채 테스트가 그대로
+> **통과**하고, 반증을 한 것처럼 착각하게 된다. 실측으로 확인된 사실:
+> `-D` → PASSED(무효), 환경변수 → FAILED(유효).
+> 이 저장소의 기존 교훈("초록불 ≠ 실행됨")과 같은 부류의 함정이다.
 
 그다음 정상 실행:
 
-Run: `./gradlew test --tests '*VirtualThreadProbeIT*'`
+Run: `./gradlew test --tests '*VirtualThreadProbeIT*' --rerun-tasks`
 Expected: PASS, 응답이 `true:` 로 시작
+
+`--rerun-tasks` 를 빼면 Gradle 이 up-to-date 로 판단해 테스트를 아예 돌리지 않고 `BUILD SUCCESSFUL` 을 낸다. 초록불을 실행 증거로 쓰려면 반드시 붙인다.
 
 - [ ] **Step 3: 실패 시에만 수정**
 
