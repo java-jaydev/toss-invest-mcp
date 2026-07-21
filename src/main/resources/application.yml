@@ -1,9 +1,16 @@
-# 전송 방식과 무관한 공통 설정만 둔다.
-# 전송별 설정은 application-stdio.yml / application-http.yml 로 분리했다.
+# 기본값은 stdio 전송이며, 이 설정은 프로파일과 무관하게 항상 적용된다.
+#
+# 왜 stdio 설정을 프로파일로 분리하지 않는가:
+# stdio 전송은 stdout 을 MCP 프로토콜 채널로 쓴다. 배너나 콘솔 로그가 stdout 으로
+# 새면 클라이언트의 JSON-RPC 파싱이 조용히 깨진다. 이 보호 설정을 stdio 프로파일에
+# 넣어두면 SPRING_PROFILES_ACTIVE 에 다른 값(prod, dev 등)이 들어오는 순간 보호가
+# 통째로 사라진다 — spring.profiles.default 는 활성 프로파일이 비어 있을 때만 적용되기
+# 때문이다. 그래서 안전한 쪽을 무조건 적용하고, HTTP 로 갈 때만 application-http.yml 이
+# 덮어쓴다. 모르는 프로파일이 와도 "깨진 하이브리드"가 아니라 정상 stdio 로 떨어진다.
 spring:
-  profiles:
-    # 프로파일을 지정하지 않으면 기존과 동일하게 stdio 로 뜬다(하위호환).
-    default: stdio
+  main:
+    web-application-type: none
+    banner-mode: "off"
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -16,6 +23,7 @@ spring:
         instructions: >-
           토스증권 공식 Open API(https://openapi.tossinvest.com) 기반 MCP 서버.
           공식 API만 사용하며(비공식 WTS 미사용), 기본은 read-only 입니다.
+        stdio: true
 
 toss:
   base-url: https://openapi.tossinvest.com
@@ -25,3 +33,10 @@ toss:
   cache:
     l2:
       enabled: ${TOSS_CACHE_L2:false}
+
+# stdout 은 프로토콜 전용이므로 콘솔 로그를 끄고 파일로만 남긴다.
+logging:
+  threshold:
+    console: "OFF"
+  file:
+    name: ./logs/toss-mcp.log

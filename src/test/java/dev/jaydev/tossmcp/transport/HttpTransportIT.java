@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.BDDMockito;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
@@ -87,5 +88,10 @@ class HttpTransportIT {
         assertThat(result.content()).isNotEmpty();
         assertThat(result.content().get(0)).isInstanceOfSatisfying(McpSchema.TextContent.class,
                 text -> assertThat(text.text()).contains("005930"));
+
+        // 이름이 "ThroughCache" 이므로 캐시를 실제로 거치는지도 확인한다.
+        // 같은 심볼을 다시 호출해도 상위 API 는 한 번만 불려야 한다(TTL 2초 이내).
+        client.callTool(new McpSchema.CallToolRequest("getPrices", Map.of("symbols", "005930")));
+        Mockito.verify(tossApiClient, Mockito.times(1)).getPrices("005930");
     }
 }

@@ -679,6 +679,36 @@ git commit -m "docs: document stdio/http transports and Java 21 requirement"
 
 ---
 
+## Phase 3 로 넘기는 항목 (최종 리뷰에서 도출)
+
+**숫자를 발표하기 전에 반드시 해소할 것.** 아래를 방치하면 k6 가 측정하는 값은
+캐시 설계 성능이 아니라 캐리어 스레드 고갈이 되고, README 에 실리는 p99 는 허수가 된다.
+
+1. **가상스레드 pinning 두 지점.** Java 21 에서 가상스레드가 `synchronized` 블록 안에서
+   블로킹하면(또는 진입 대기하면) 캐리어 스레드를 붙잡는다(JDK 24 / JEP 491 에서 해소).
+   - `TossAuthService.accessToken()` — `synchronized` 메서드 안에서 OAuth 토큰 발급
+     HTTP POST 를 블로킹 호출한다. `TossApiClient.get()` 이 **모든** 상위 요청마다 부른다.
+     토큰 만료 시점에 부하가 걸리면 한 스레드가 토큰 왕복 시간 내내 캐리어를 잡고,
+     나머지 요청은 그 단일 모니터를 기다리며 각자 캐리어를 붙잡는다.
+     → 해법: `ReentrantLock` 으로 교체.
+   - `MarketDataCache.get()` — Caffeine `l1.get(key, loader)` 가 내부적으로
+     `ConcurrentMap.computeIfAbsent` 를 타며, 매핑 함수(= L2 Redis 왕복 + 상위 HTTP 호출)
+     전체 동안 bin 모니터를 쥔다.
+     → 해법: Caffeine `AsyncCache`. `CompletableFuture` 를 맵에 넣어 bin 락을 즉시 놓으면서
+     요청병합(single-flight)은 그대로 유지된다.
+   - 최소 진단: 부하 실행 시 `-Djdk.tracePinnedThreads=full`.
+
+2. **Streamable 세션 누적.** `HttpServletStreamableServerTransportProvider` 가
+   세션을 `ConcurrentHashMap` 에 보관하는데, 유휴 세션 축출 경로가 확인되지 않았다
+   (명시적 `DELETE /mcp` 로만 정리되는 것으로 보임). k6 VU 가 이터레이션마다
+   `initialize` 만 하고 정리를 안 하면 맵이 무한히 자라 메모리 프로파일이 왜곡된다.
+   → k6 시나리오의 VU teardown 에서 `DELETE /mcp` 를 반드시 호출할 것.
+   → `STREAMABLE` 선택 자체는 유지(실제 MCP 클라이언트가 쓰는 규격). 설정 문제가 아니라
+     부하 스크립트 요구사항이다.
+
+3. **캐시 계층 명시.** L2 는 기본 비활성(`TOSS_CACHE_L2:false`)이다. 숫자를 낼 때
+   L1 단독인지 L1+L2 인지 반드시 함께 밝힐 것 — 전혀 다른 결과다.
+
 ## 완료 조건
 
 - [ ] 전체 테스트 통과, 실패 0 (신규 테스트 포함)

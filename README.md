@@ -24,6 +24,11 @@ AI coding agents are great at reasoning but blind to live market data. `toss-inv
 
 ## Quickstart
 
+> **Requires Java 21 or newer at runtime**, not just to build. The jar is compiled
+> to class-file version 65; launching it on an older JVM fails immediately with
+> `UnsupportedClassVersionError`. Check with `java -version`, and make sure the
+> `"command": "java"` in your MCP config resolves to a 21+ JVM.
+
 ### 1. Build
 
 ```bash
@@ -87,7 +92,7 @@ HTTP at `/mcp`, with requests handled on Java 21 virtual threads.
 
 ```
 AI Agent (Claude Code / Cursor / …)
-        │  MCP (stdio)
+        │  MCP over stdio (default)  or  Streamable HTTP at /mcp
         ▼
  MarketDataTools  ──▶  TossApiClient  ──▶  Toss Open API
    (@Tool)               (RestClient)         (REST)
