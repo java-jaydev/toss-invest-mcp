@@ -29,10 +29,13 @@ dependencies {
     // 전송 선택은 Spring 프로파일(stdio / http)로 가른다.
     implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-json'
-    // L1 near-cache (single-flight via Caffeine's atomic get(key, loader))
+    // L1 near-cache (single-flight via Caffeine AsyncCache; loader runs off the monitor)
     implementation 'com.github.ben-manes.caffeine:caffeine'
     // L2 shared cache
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    // 관측성: Micrometer 계측 + /actuator/prometheus 노출 (버전은 Boot BOM 관리)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'

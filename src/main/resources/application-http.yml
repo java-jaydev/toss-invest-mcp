@@ -22,6 +22,18 @@ spring:
 server:
   port: ${PORT:8080}
 
+# 관측성: Prometheus 스크레이프 엔드포인트를 노출한다. 이 프로파일(http)에만
+# 웹서버가 있으므로, 계측 노출도 여기서만 의미가 있다(stdio 는 웹서버 없음).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
 # HTTP 모드에서는 stdout 이 프로토콜 채널이 아니므로 콘솔 로그를 되살린다.
 logging:
   threshold:
