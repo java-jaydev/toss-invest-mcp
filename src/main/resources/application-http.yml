@@ -33,6 +33,11 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    distribution:
+      # HTTP 요청 지연의 히스토그램 버킷을 발행해 Prometheus 에서 p95/p99 를 계산할 수 있게 한다.
+      percentiles-histogram:
+        http.server.requests: true
 
 # HTTP 모드에서는 stdout 이 프로토콜 채널이 아니므로 콘솔 로그를 되살린다.
 logging:
