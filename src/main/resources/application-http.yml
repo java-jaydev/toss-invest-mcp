@@ -1,0 +1,28 @@
+# Streamable HTTP 전송(MCP 스펙 2025-03-26). SSE 는 이 스펙으로 대체됐다.
+# 톰캣 요청 처리를 가상스레드로 돌린다 — 토스 API 응답 대기(IO 바운드)에서
+# 플랫폼 스레드를 붙잡지 않으므로 동시 처리량이 크게 오른다.
+#
+# application.yml 의 기본값은 stdio 안전 설정(웹서버 없음·배너 끔·콘솔로그 끔)이다.
+# 아래 항목들은 그 기본값을 명시적으로 되돌리는 오버라이드이며, 중복이 아니라 필수다.
+spring:
+  main:
+    web-application-type: servlet   # override: none
+    banner-mode: "console"          # override: off — stdout 이 프로토콜 채널이 아니므로 되살린다
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    mcp:
+      server:
+        stdio: false                # override: true
+        protocol: STREAMABLE
+        streamable-http:
+          mcp-endpoint: /mcp
+
+server:
+  port: ${PORT:8080}
+
+# HTTP 모드에서는 stdout 이 프로토콜 채널이 아니므로 콘솔 로그를 되살린다.
+logging:
+  threshold:
+    console: "INFO"

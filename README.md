@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/java-jaydev/toss-invest-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/java-jaydev/toss-invest-mcp/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://adoptium.net/)
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://adoptium.net/)
 [![Spring AI](https://img.shields.io/badge/Spring%20AI-1.1.x-green.svg)](https://docs.spring.io/spring-ai/reference/)
 
 A **Model Context Protocol (MCP) server** that lets AI agents (Claude Code, Cursor, Codex, …) query **Korean stock-market data** through the official **Toss Securities Open API**.
 
-Built with **Java 17 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Read-only by default.
+Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Read-only by default.
 
 ---
 
@@ -17,12 +17,17 @@ AI coding agents are great at reasoning but blind to live market data. `toss-inv
 
 ## Features
 
-- ✅ **Market data (read-only)** — `get_prices` (quotes, up to 200 symbols), `get_orderbook`, `get_trades`, `get_candles` (1m/1d), `get_stocks` (instrument info). Parameters verified against the official OpenAPI spec.
+- ✅ **Market data (read-only)** — `getPrices` (quotes, up to 200 symbols), `getOrderbook`, `getTrades`, `getCandles` (1m/1d), `getStocks` (instrument info). Parameters verified against the official OpenAPI spec.
 - 🔒 OAuth2 client-credentials with automatic token caching & refresh
 - 🔑 Secrets via environment variables only (never committed)
-- 🗺️ **Roadmap**: caching + request-coalescing (done) → HTTP (Streamable) transport → load testing for concurrency (see [Roadmap](#roadmap))
+- 🗺️ **Roadmap**: caching + request-coalescing (done) → HTTP (Streamable) transport (done) → load testing for concurrency (see [Roadmap](#roadmap))
 
 ## Quickstart
+
+> **Requires Java 21 or newer at runtime**, not just to build. The jar is compiled
+> to class-file version 65; launching it on an older JVM fails immediately with
+> `UnsupportedClassVersionError`. Check with `java -version`, and make sure the
+> `"command": "java"` in your MCP config resolves to a 21+ JVM.
 
 ### 1. Build
 
@@ -60,11 +65,34 @@ Add to your MCP config (`.mcp.json` or Claude Code settings):
 
 Then ask your agent: *"삼성전자(005930) 현재가 알려줘."*
 
+## Transports
+
+One artifact serves both transports, selected by Spring profile.
+
+### stdio (default)
+
+For local MCP clients (Claude Code, Cursor, Codex, …). No profile needed —
+this is the default, so it behaves exactly as before:
+
+```bash
+./gradlew bootRun
+```
+
+### Streamable HTTP
+
+For remote access and load testing. Serves MCP spec 2025-03-26's Streamable
+HTTP at `/mcp`, with requests handled on Java 21 virtual threads.
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=http'
+# Default port 8080, override with the PORT env var
+```
+
 ## Architecture
 
 ```
 AI Agent (Claude Code / Cursor / …)
-        │  MCP (stdio)
+        │  MCP over stdio (default)  or  Streamable HTTP at /mcp
         ▼
  MarketDataTools  ──▶  TossApiClient  ──▶  Toss Open API
    (@Tool)               (RestClient)         (REST)
@@ -72,7 +100,7 @@ AI Agent (Claude Code / Cursor / …)
                         TossAuthService  (OAuth2 token cache)
 ```
 
-- **stdio transport** today; **Streamable HTTP** planned for multi-client / high-concurrency use.
+- **stdio transport** by default; **Streamable HTTP** (see [Transports](#transports)) for multi-client / high-concurrency use.
 - Thin, transparent layer — tools return raw JSON so the LLM reads the source of truth.
 
 ## Roadmap
@@ -81,7 +109,7 @@ AI Agent (Claude Code / Cursor / …)
 |---|---|
 | 1 ✅ | Read-only market-data tools: prices, orderbook, trades, candles, stocks — **done** |
 | 2 ✅ | Two-tier cache (Caffeine L1 + Redis L2) + per-node single-flight coalescing in front of the rate-limited upstream — **done** |
-| 2.5 | HTTP (Streamable) transport (WebMVC) alongside stdio — enables load testing |
+| 2.5 ✅ | HTTP (Streamable) transport (WebMVC) alongside stdio — **done** |
 | 3 | Load testing (k6) + observability (Micrometer / Prometheus / Grafana) with published throughput & latency numbers |
 | 4 | Account & order tools behind explicit opt-in safety gates (dry-run → confirm) |
 
