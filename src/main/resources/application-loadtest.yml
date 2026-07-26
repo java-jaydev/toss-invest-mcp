@@ -1,0 +1,12 @@
+# loadtest 프로파일: http 와 함께 활성화한다 (예: --spring.profiles.active=http,loadtest).
+# 실제 토스 자격증명 없이 부팅되도록 더미 값을 채우고, 스텁 upstream 의 고정 지연을 둔다.
+toss:
+  base-url: http://stub.local
+  client-id: stub
+  client-secret: stub
+  account: stub
+
+loadtest:
+  upstream:
+    # 스텁 upstream 이 응답 전 대기하는 고정 지연(ms). 토스 실제 지연이 아니다.
+    latency-ms: ${LOADTEST_UPSTREAM_LATENCY_MS:40}
