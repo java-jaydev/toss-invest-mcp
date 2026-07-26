@@ -1,0 +1,57 @@
+# AGENTS.md
+
+Guidance for AI coding agents working on **toss-invest-mcp**. Human contributors: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## What this project is
+
+An MCP server (Java 21 + Spring Boot + Spring AI) exposing Toss Securities Open API market data as read-only MCP tools. See [llms.txt](llms.txt) for a compact fact sheet and [README.md](README.md) for the overview.
+
+## Setup, build, run, test
+
+```bash
+./gradlew build                                          # compile + test (needs JDK 21)
+./gradlew test                                           # tests only
+./gradlew bootRun                                        # run as stdio MCP server (default)
+./gradlew bootRun --args='--spring.profiles.active=http' # run Streamable HTTP on :8080
+```
+
+- **JDK 21 is required**, at runtime too (virtual threads; class-file version 65). Gradle's toolchain provisions 21 for build/test even if the default `java` is older.
+- Provide credentials via env vars only: `TOSS_CLIENT_ID`, `TOSS_CLIENT_SECRET`, `TOSS_ACCOUNT`. Never hard-code secrets. A local `.env` is git-ignored.
+
+## Project layout
+
+```
+src/main/java/dev/jaydev/tossmcp/
+  TossMcpApplication.java      # @SpringBootApplication; registers @Tool beans
+  tools/MarketDataTools.java   # MCP @Tool definitions (the 5 tools)
+  service/MarketDataService.java # per-type TTLs + symbol normalization
+  cache/                       # MarketDataCache (Caffeine AsyncCache L1 + single-flight), L2Cache/RedisL2Cache/NoOpL2Cache
+  client/TossApiClient.java    # REST wrapper over the Toss Open API
+  auth/TossAuthService.java    # OAuth2 client-credentials token cache/refresh
+  config/TossProperties.java   # toss.* config binding
+  loadtest/                    # stub upstream + HTTP shim (loadtest profile only; not in production)
+src/main/resources/            # application.yml (stdio), application-http.yml, application-loadtest.yml
+loadtest/                      # k6 scripts, Prometheus/Grafana, methodology
+docs/                          # tools.md, vibe-coding.md
+```
+
+## Testing notes
+
+- Run `./gradlew test` and make sure it stays green before proposing changes. Test logging prints `passed/skipped/failed` per test — a green build with a skipped integration test is **not** proof it ran.
+- `cache/RedisL2CacheIT` uses Testcontainers and **self-skips without Docker** (e.g. on WSL). It runs for real in CI, which has Docker. To exercise a Docker-dependent path, open a PR so CI runs it.
+- Tests that assert on metrics or scrape `/actuator/prometheus` must be annotated `@AutoConfigureObservability`; `@SpringBootTest` disables metrics export by default.
+- Virtual-thread pinning is guarded by `vthread/VirtualThreadPinningTest` (JFR `jdk.VirtualThreadPinned` count must be 0). Keep blocking I/O off `synchronized` monitors — use `ReentrantLock` and Caffeine `AsyncCache`.
+
+## Conventions
+
+- **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`…), imperative mood. Do not add auto-generated attribution or tool boilerplate to messages.
+- **Docs honesty:** never document features that don't exist, and never present benchmark numbers without their environment caveat. Published load numbers are *ratios* (cache offload), not absolute latency — see [loadtest/README.md](loadtest/README.md).
+- **Plain language:** spell out abbreviations on first use; assume the reader is new to the domain.
+- **Scope:** official API only (no unofficial WTS scraping); read-only tools first. Account/order tools must sit behind explicit opt-in safety gates.
+
+## Adding a tool
+
+1. Add a method to `client/TossApiClient` (verify params against the official OpenAPI spec — don't guess).
+2. Add a cached, TTL-tagged method to `service/MarketDataService`.
+3. Expose it as an `@Tool` in `tools/MarketDataTools` with a clear description and schema.
+4. Add tests (service-level cache behavior at minimum) and document it in [docs/tools.md](docs/tools.md).
