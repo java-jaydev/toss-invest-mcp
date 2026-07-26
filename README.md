@@ -20,7 +20,8 @@ AI coding agents are great at reasoning but blind to live market data. `toss-inv
 - ✅ **Market data (read-only)** — `getPrices` (quotes, up to 200 symbols), `getOrderbook`, `getTrades`, `getCandles` (1m/1d), `getStocks` (instrument info). Parameters verified against the official OpenAPI spec.
 - 🔒 OAuth2 client-credentials with automatic token caching & refresh
 - 🔑 Secrets via environment variables only (never committed)
-- 🗺️ **Roadmap**: caching + request-coalescing (done) → HTTP (Streamable) transport (done) → load testing for concurrency (see [Roadmap](#roadmap))
+- 📊 **Observability** — Micrometer metrics (cache offload, single-flight, Caffeine stats) at `/actuator/prometheus` (HTTP profile); load-test harness in [`loadtest/`](loadtest/)
+- 🗺️ **Roadmap**: caching + coalescing (done) → HTTP transport (done) → virtual-thread pinning fix + load testing & observability (done) → order tools behind safety gates (see [Roadmap](#roadmap))
 
 ## Quickstart
 
@@ -110,7 +111,8 @@ AI Agent (Claude Code / Cursor / …)
 | 1 ✅ | Read-only market-data tools: prices, orderbook, trades, candles, stocks — **done** |
 | 2 ✅ | Two-tier cache (Caffeine L1 + Redis L2) + per-node single-flight coalescing in front of the rate-limited upstream — **done** |
 | 2.5 ✅ | HTTP (Streamable) transport (WebMVC) alongside stdio — **done** |
-| 3 | Load testing (k6) + observability (Micrometer / Prometheus / Grafana) with published throughput & latency numbers |
+| 3a ✅ | Remove virtual-thread carrier pinning at the cache loader and token refresh, proven with JFR pin-count tests — **done** |
+| 3b ✅ | Load testing (k6) + observability (Micrometer / Prometheus / Grafana); measured cache-offload & single-flight ratios — **done** (see [Observability & load testing](#observability--load-testing)) |
 | 4 | Account & order tools behind explicit opt-in safety gates (dry-run → confirm) |
 
 ## Caching
@@ -119,10 +121,11 @@ Read-only market-data calls pass through a cache so bursts of identical
 requests collapse to at most one upstream call, and slow-changing data is not
 re-fetched from the rate-limited upstream on every request:
 
-- **L1 — Caffeine (in-process):** `get(key, loader)` is atomic per key, so
-  concurrent identical requests on a node are single-flighted to one load.
-  Each entry expires at its per-type TTL, so a single node caches correctly
-  **without Redis**.
+- **L1 — Caffeine `AsyncCache` (in-process):** concurrent identical requests
+  on a node share one in-flight future, so they are single-flighted to one
+  load. Loading runs off the map's monitor on a virtual thread, so blocking
+  upstream I/O never pins a JDK 21 carrier. Each entry expires at its per-type
+  TTL, so a single node caches correctly **without Redis**.
 - **Per-type TTLs:** quotes/orderbook 2s, trades 3s, intraday candles 10s,
   daily candles 1h, stock info 6h.
 - **L2 — Redis (opt-in, shared):** the same entries in a shared cache, so
@@ -144,6 +147,28 @@ Scope note: L1 single-flight is per-node. Cross-node request coalescing is not
 implemented; the shared L2 narrows (but does not eliminate) the concurrent-miss
 window when running multiple instances. The Redis L2 path is covered by
 `RedisL2CacheIT` (Testcontainers), which requires Docker to run.
+
+## Observability & load testing
+
+The HTTP profile exposes Micrometer metrics at `/actuator/prometheus`, including
+domain counters that make cache behavior legible:
+
+- `marketdata_upstream_calls_total` — actual upstream calls (fewer than requests = offload)
+- `marketdata_l2_hits_total` — shared-cache hits
+- Caffeine L1 stats (`cache_gets_total{result="hit"|"miss"}`, size, evictions)
+
+[`loadtest/`](loadtest/) has k6 scripts, a Prometheus + Grafana stack, and a
+`loadtest` profile with a fixed-latency **stub** upstream, so the cache /
+coalescing / virtual-thread path can be driven without real credentials.
+
+**Measured** (WSL2 dev box; cache + 40 ms stub upstream — these are *ratios*, not
+absolute latency claims; full honesty caveats in [loadtest/README](loadtest/README.md)):
+
+- 200 concurrent cold-key requests → **1** upstream call (single-flight)
+- 157,476 requests on one hot key → **1** upstream call, L1 hit ratio ≈ 99.998%
+
+These offload and coalescing properties are guarded deterministically in CI by
+`LoadOffloadIT` — no k6 or Docker required.
 
 ## Contributing
 

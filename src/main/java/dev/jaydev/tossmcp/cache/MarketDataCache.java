@@ -4,6 +4,10 @@ import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.Ticker;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -30,21 +34,42 @@ public class MarketDataCache {
 
     private final AsyncCache<String, Entry> l1;
     private final L2Cache l2;
+    private final Counter upstreamCalls;
+    private final Counter l2Hits;
 
     @Autowired
-    public MarketDataCache(L2Cache l2) {
-        this(l2, Ticker.systemTicker());
+    public MarketDataCache(L2Cache l2, MeterRegistry registry) {
+        this(l2, Ticker.systemTicker(), registry);
     }
 
+    // 테스트 편의: 지표를 버리는 레지스트리로 만든다(계측 검증이 목적이 아닌 테스트용).
+    public MarketDataCache(L2Cache l2) {
+        this(l2, Ticker.systemTicker(), new SimpleMeterRegistry());
+    }
+
+    // 테스트 편의: 수동 ticker + 버려지는 레지스트리(TTL 테스트용).
     MarketDataCache(L2Cache l2, Ticker ticker) {
+        this(l2, ticker, new SimpleMeterRegistry());
+    }
+
+    MarketDataCache(L2Cache l2, Ticker ticker, MeterRegistry registry) {
         this.l2 = l2;
+        this.upstreamCalls = Counter.builder("marketdata.upstream.calls")
+                .description("upstream(토스 API) 실제 호출 횟수 — 캐시·병합으로 요청수보다 적다")
+                .register(registry);
+        this.l2Hits = Counter.builder("marketdata.l2.hits")
+                .description("L2(공유 캐시)에서 값을 가져온 횟수")
+                .register(registry);
         this.l1 = Caffeine.newBuilder()
                 .maximumSize(L1_MAX_SIZE)
                 .ticker(ticker)
                 // 로딩을 가상스레드에서 돌려 loader 의 블로킹 I/O 가 캐리어를 핀하지 않게 한다.
                 .executor(Executors.newVirtualThreadPerTaskExecutor())
                 .expireAfter(new TtlExpiry())
+                .recordStats()
                 .buildAsync();
+        // Caffeine 내부 통계(히트/미스/적재/축출)를 Micrometer 로 노출.
+        CaffeineCacheMetrics.monitor(registry, l1.synchronous(), "marketdata.l1");
     }
 
     /** L1(타입별 TTL, single-flight) → L2(공유) → upstream 순으로 해석. */
@@ -64,8 +89,10 @@ public class MarketDataCache {
     private String l2GetOrLoad(String key, Duration ttl, Supplier<String> upstream) {
         Optional<String> hit = l2.get(key);
         if (hit.isPresent()) {
+            l2Hits.increment();
             return hit.get();
         }
+        upstreamCalls.increment();
         String value = upstream.get();
         if (value != null) {
             l2.put(key, value, ttl);

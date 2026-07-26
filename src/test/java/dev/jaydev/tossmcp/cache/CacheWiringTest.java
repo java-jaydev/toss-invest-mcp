@@ -4,6 +4,7 @@ import dev.jaydev.tossmcp.client.TossApiClient;
 import dev.jaydev.tossmcp.config.TossProperties;
 import dev.jaydev.tossmcp.service.MarketDataService;
 import dev.jaydev.tossmcp.tools.MarketDataTools;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -15,6 +16,7 @@ class CacheWiringTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withBean(TossProperties.class, () -> new TossProperties("https://example.test", "id", "secret", "acct"))
+            .withBean(SimpleMeterRegistry.class)
             .withUserConfiguration(
                     dev.jaydev.tossmcp.auth.TossAuthService.class,
                     TossApiClient.class,
