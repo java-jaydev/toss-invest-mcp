@@ -1,6 +1,6 @@
 package dev.jaydev.tossmcp.cache;
 
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.Ticker;
@@ -9,12 +9,16 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 /**
  * 2계층 캐시 + 요청병합.
- * L1(Caffeine): get(key, loader) 가 키 단위 원자 실행이라 동일 키 동시요청을
- * single-flight 로 병합한다. 각 항목은 호출자가 지정한 타입별 TTL 로 만료되므로,
+ * L1(Caffeine AsyncCache): 키 단위로 하나의 진행 중 future 를 공유해 동일 키
+ * 동시요청을 single-flight 로 병합한다. 동기 Cache.get(key, loader) 와 달리 loader 가
+ * ConcurrentHashMap 모니터 밖(별도 가상스레드)에서 실행되므로, 로딩 중 블로킹 I/O 가
+ * JDK 21 캐리어를 핀하지 않는다. 각 항목은 호출자가 지정한 타입별 TTL 로 만료되므로,
  * Redis 없이도 종목정보 6h·분봉 10s 등 의도대로 캐시된다.
  * L2(공유 캐시, opt-in): L1 미스 시 조회, 미스면 upstream 호출 후 L2 적재.
  * 여러 인스턴스로 확장하면 L2 가 노드 간 캐시를 공유한다.
@@ -24,7 +28,7 @@ public class MarketDataCache {
 
     private static final int L1_MAX_SIZE = 10_000;
 
-    private final Cache<String, Entry> l1;
+    private final AsyncCache<String, Entry> l1;
     private final L2Cache l2;
 
     @Autowired
@@ -37,16 +41,23 @@ public class MarketDataCache {
         this.l1 = Caffeine.newBuilder()
                 .maximumSize(L1_MAX_SIZE)
                 .ticker(ticker)
+                // 로딩을 가상스레드에서 돌려 loader 의 블로킹 I/O 가 캐리어를 핀하지 않게 한다.
+                .executor(Executors.newVirtualThreadPerTaskExecutor())
                 .expireAfter(new TtlExpiry())
-                .build();
+                .buildAsync();
     }
 
     /** L1(타입별 TTL, single-flight) → L2(공유) → upstream 순으로 해석. */
     public String get(String key, Duration ttl, Supplier<String> upstream) {
-        Entry entry = l1.get(key, k -> {
-            String value = l2GetOrLoad(k, ttl, upstream);
-            return value == null ? null : new Entry(value, ttl);
-        });
+        // mappingFunction 은 진행 중 future 가 없을 때만 호출된다. supplyAsync 가 즉시
+        // 반환하므로 Caffeine 의 compute 모니터는 곧바로 풀리고, 실제 로딩은 executor 의
+        // 가상스레드에서 일어난다. 동일 키 동시요청은 같은 future 를 공유(single-flight).
+        CompletableFuture<Entry> future = l1.get(key, (k, executor) ->
+                CompletableFuture.supplyAsync(() -> {
+                    String value = l2GetOrLoad(k, ttl, upstream);
+                    return value == null ? null : new Entry(value, ttl);
+                }, executor));
+        Entry entry = future.join();
         return entry == null ? null : entry.value();
     }
 
