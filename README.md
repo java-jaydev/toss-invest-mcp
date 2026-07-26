@@ -5,175 +5,135 @@
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://adoptium.net/)
 [![Spring AI](https://img.shields.io/badge/Spring%20AI-1.1.x-green.svg)](https://docs.spring.io/spring-ai/reference/)
 
-A **Model Context Protocol (MCP) server** that lets AI agents (Claude Code, Cursor, Codex, …) query **Korean stock-market data** through the official **Toss Securities Open API**.
+**🇰🇷 한국어** · [🇬🇧 English](README.en.md)
 
-Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Read-only by default.
+AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open API**로 **한국·미국 주식 시세**를 조회하게 해주는 **MCP(Model Context Protocol) 서버**입니다.
+
+**Java 21 + Spring Boot + Spring AI**로 만들었습니다. 공식 API만 사용하고(비공식 WTS 미사용), 기본은 읽기 전용입니다.
 
 ---
 
-## Why
+## 📖 이게 뭔가요? (1분 설명)
 
-AI coding agents are great at reasoning but blind to live market data. `toss-invest-mcp` bridges that gap: expose Toss Securities' official data as MCP tools, so any MCP-capable agent can ask *"what's the current price of Samsung Electronics?"* and get a real answer.
+- **MCP**는 AI가 외부 도구·데이터에 접근하는 표준 규격입니다. USB-C 같은 거라고 보면 됩니다.
+- 이 서버를 AI 에이전트에 연결하면, 에이전트에게 *"삼성전자 현재가 알려줘"* 라고 물었을 때 **실제 시세**로 답합니다.
+- AI는 똑똑하지만 실시간 시세는 못 봅니다. 이 서버가 그 눈이 되어줍니다.
 
-## Features
+## 🧭 문서 안내 (여기서 원하는 곳으로)
 
-- ✅ **Market data (read-only)** — `getPrices` (quotes, up to 200 symbols), `getOrderbook`, `getTrades`, `getCandles` (1m/1d), `getStocks` (instrument info). Parameters verified against the official OpenAPI spec.
-- 🔒 OAuth2 client-credentials with automatic token caching & refresh
-- 🔑 Secrets via environment variables only (never committed)
-- 📊 **Observability** — Micrometer metrics (cache offload, single-flight, Caffeine stats) at `/actuator/prometheus` (HTTP profile); load-test harness in [`loadtest/`](loadtest/)
-- 🗺️ **Roadmap**: caching + coalescing (done) → HTTP transport (done) → virtual-thread pinning fix + load testing & observability (done) → order tools behind safety gates (see [Roadmap](#roadmap))
+| 문서 | 내용 |
+|---|---|
+| **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **비개발자용 초친절 가이드** — 터미널이 낯설어도 AI에게 부탁해서 세팅하는 법 |
+| [docs/tools.md](docs/tools.md) | 🧰 5개 도구 상세 레퍼런스 + 실제 요청/응답 예시 |
+| [README.en.md](README.en.md) | 🇬🇧 English version |
+| [llms.txt](llms.txt) | 🤖 LLM용 기계가독 인덱스 |
+| [AGENTS.md](AGENTS.md) | 🛠️ 이 저장소에서 작업할 AI 코딩 에이전트용 안내 |
 
-## Quickstart
+## ✨ 기능
 
-> **Requires Java 21 or newer at runtime**, not just to build. The jar is compiled
-> to class-file version 65; launching it on an older JVM fails immediately with
-> `UnsupportedClassVersionError`. Check with `java -version`, and make sure the
-> `"command": "java"` in your MCP config resolves to a 21+ JVM.
+- ✅ **시세 조회 5종(읽기 전용)** — `getPrices`(현재가, 최대 200종목), `getOrderbook`(호가), `getTrades`(체결), `getCandles`(1분/1일 봉), `getStocks`(종목정보). 파라미터는 공식 OpenAPI 스펙으로 검증했습니다.
+- 🌏 **국내·해외 동시 지원** — 국내는 6자리 코드(예: `005930`, 원), 미국은 티커(예: `AAPL`, 달러). 같은 도구가 둘 다 처리합니다.
+- 🔒 OAuth2 토큰 자동 발급·캐시·갱신
+- 🔑 시크릿은 환경변수로만(코드에 절대 안 넣음)
+- ⚡ **2계층 캐시 + 요청병합** — 같은 요청이 몰려도 상단(토스 API)은 한 번만 호출 ([자세히](#-캐시--요청병합))
+- 📊 **관측성** — `/actuator/prometheus`로 캐시 오프로드·처리량 지표 노출 ([자세히](#-관측성--부하테스트))
 
-### 1. Build
+## 🚀 5분 시작
+
+> 💡 **터미널이 처음이라도 괜찮아요.** 아래 명령을 Claude Code나 Cursor 같은 AI에게 그대로 보여주며
+> *"이거 대신 해줘"* 라고 부탁하면 됩니다. 손 잡고 알려주는 [비개발자 가이드](docs/vibe-coding.md)도 있습니다.
+
+### 준비물
+
+1. **Java 21 이상** (빌드·실행 모두). 확인: `java -version` → `21` 이상이어야 함. 없으면 [Adoptium](https://adoptium.net/)에서 설치.
+2. **토스증권 Open API 키** — [openapi.tossinvest.com](https://openapi.tossinvest.com)에서 발급(클라이언트 ID·시크릿). 콘솔에서 **호출 서버의 공인 IP를 허용목록에 등록**해야 합니다.
+
+### 1) 빌드
 
 ```bash
+git clone https://github.com/java-jaydev/toss-invest-mcp.git
+cd toss-invest-mcp
 ./gradlew build
 ```
 
-### 2. Configure (environment variables)
+### 2) Claude Code(또는 Cursor 등)에 연결
 
-```bash
-export TOSS_CLIENT_ID=your_client_id
-export TOSS_CLIENT_SECRET=your_client_secret
-```
-
-Get credentials from the [Toss Securities Open API](https://openapi.tossinvest.com).
-
-### 3. Connect to Claude Code
-
-Add to your MCP config (`.mcp.json` or Claude Code settings):
+MCP 설정 파일(`.mcp.json` 또는 클라이언트 설정)에 추가합니다. **`java`가 21 이상을 가리키는지** 꼭 확인하세요.
 
 ```json
 {
   "mcpServers": {
     "toss-invest": {
       "command": "java",
-      "args": ["-jar", "/absolute/path/to/build/libs/toss-invest-mcp-0.1.0.jar"],
+      "args": ["-jar", "/절대경로/build/libs/toss-invest-mcp-0.1.0.jar"],
       "env": {
-        "TOSS_CLIENT_ID": "your_client_id",
-        "TOSS_CLIENT_SECRET": "your_client_secret"
+        "TOSS_CLIENT_ID": "발급받은_클라이언트_ID",
+        "TOSS_CLIENT_SECRET": "발급받은_시크릿"
       }
     }
   }
 }
 ```
 
-Then ask your agent: *"삼성전자(005930) 현재가 알려줘."*
+### 3) 물어보기
 
-## Transports
+에이전트에게 자연어로 물어보면 됩니다:
 
-One artifact serves both transports, selected by Spring profile.
+> **"삼성전자(005930) 현재가 알려줘"**
+> → `{"symbol":"005930","lastPrice":"252500","currency":"KRW"}`
+>
+> **"애플(AAPL) 지금 얼마야?"**
+> → `{"symbol":"AAPL","lastPrice":"333.80","currency":"USD"}`
+>
+> **"삼성전자 최근 5일 일봉 보여줘"**
+> → 시가·고가·저가·종가·거래량이 담긴 캔들 5개
 
-### stdio (default)
+> ⚠️ **Java 21 런타임 필수.** jar는 클래스파일 버전 65로 컴파일됩니다. 더 낮은 JVM에서 실행하면
+> 즉시 `UnsupportedClassVersionError`로 실패합니다. MCP 설정의 `"command": "java"`가 21+를 가리키는지 확인하세요.
 
-For local MCP clients (Claude Code, Cursor, Codex, …). No profile needed —
-this is the default, so it behaves exactly as before:
+## 🔌 전송 방식 (Transports)
 
-```bash
-./gradlew bootRun
-```
+하나의 아티팩트가 두 전송을 모두 서비스하며, Spring 프로파일로 고릅니다.
 
-### Streamable HTTP
+- **stdio (기본)** — 로컬 MCP 클라이언트용. 프로파일 지정 없이 `./gradlew bootRun`.
+- **Streamable HTTP** — 원격·다중 클라이언트·부하테스트용. `/mcp`에서 MCP 스펙 2025-03-26을 서비스하며, 요청을 **Java 21 가상스레드**로 처리합니다. `./gradlew bootRun --args='--spring.profiles.active=http'` (기본 포트 8080).
 
-For remote access and load testing. Serves MCP spec 2025-03-26's Streamable
-HTTP at `/mcp`, with requests handled on Java 21 virtual threads.
+## 🧰 도구 요약
 
-```bash
-./gradlew bootRun --args='--spring.profiles.active=http'
-# Default port 8080, override with the PORT env var
-```
+| 도구 | 설명 | 주요 인자 |
+|---|---|---|
+| `getPrices` | 현재가 | `symbols`(콤마, 최대 200) |
+| `getOrderbook` | 호가(매수·매도 잔량) | `symbol` |
+| `getTrades` | 최근 체결 | `symbol`, `count` |
+| `getCandles` | 캔들(시고저종) | `symbol`, `interval`(1m/1d), `count` |
+| `getStocks` | 종목 기본정보 | `symbols`(콤마, 최대 200) |
 
-## Architecture
+→ 요청/응답 실제 예시는 **[docs/tools.md](docs/tools.md)** 참고.
 
-```
-AI Agent (Claude Code / Cursor / …)
-        │  MCP over stdio (default)  or  Streamable HTTP at /mcp
-        ▼
- MarketDataTools  ──▶  TossApiClient  ──▶  Toss Open API
-   (@Tool)               (RestClient)         (REST)
-                              │
-                        TossAuthService  (OAuth2 token cache)
-```
+## ⚡ 캐시 & 요청병합
 
-- **stdio transport** by default; **Streamable HTTP** (see [Transports](#transports)) for multi-client / high-concurrency use.
-- Thin, transparent layer — tools return raw JSON so the LLM reads the source of truth.
+읽기 전용 시세 호출은 캐시를 거칩니다. 똑같은 요청이 몰려도 상단 호출은 최대 1회로 뭉치고, 잘 안 바뀌는 데이터는 매번 다시 가져오지 않습니다.
 
-## Roadmap
+- **L1 — Caffeine `AsyncCache`(인프로세스):** 같은 키의 동시요청은 하나의 진행 중 future를 공유해 single-flight로 병합됩니다. 로딩은 모니터 밖 가상스레드에서 돌아, 블로킹 I/O가 JDK 21 캐리어를 핀하지 않습니다. 항목별 TTL로 만료돼 **Redis 없이도** 정상 캐시됩니다.
+- **항목별 TTL:** 현재가·호가 2초, 체결 3초, 분봉 10초, 일봉 1시간, 종목정보 6시간.
+- **L2 — Redis(선택, 공유):** 여러 인스턴스가 캐시를 공유. Redis 오류는 캐시 미스로 격하될 뿐 도구 호출을 깨지 않습니다.
 
-| Phase | Goal |
-|---|---|
-| 1 ✅ | Read-only market-data tools: prices, orderbook, trades, candles, stocks — **done** |
-| 2 ✅ | Two-tier cache (Caffeine L1 + Redis L2) + per-node single-flight coalescing in front of the rate-limited upstream — **done** |
-| 2.5 ✅ | HTTP (Streamable) transport (WebMVC) alongside stdio — **done** |
-| 3a ✅ | Remove virtual-thread carrier pinning at the cache loader and token refresh, proven with JFR pin-count tests — **done** |
-| 3b ✅ | Load testing (k6) + observability (Micrometer / Prometheus / Grafana); measured cache-offload & single-flight ratios — **done** (see [Observability & load testing](#observability--load-testing)) |
-| 4 | Account & order tools behind explicit opt-in safety gates (dry-run → confirm) |
+심볼은 정규화(공백 제거·정렬)되어 `005930,000660`과 `000660,005930`이 한 항목을 공유합니다.
 
-## Caching
+## 📊 관측성 & 부하테스트
 
-Read-only market-data calls pass through a cache so bursts of identical
-requests collapse to at most one upstream call, and slow-changing data is not
-re-fetched from the rate-limited upstream on every request:
+HTTP 프로파일은 `/actuator/prometheus`로 Micrometer 지표를 노출합니다:
 
-- **L1 — Caffeine `AsyncCache` (in-process):** concurrent identical requests
-  on a node share one in-flight future, so they are single-flighted to one
-  load. Loading runs off the map's monitor on a virtual thread, so blocking
-  upstream I/O never pins a JDK 21 carrier. Each entry expires at its per-type
-  TTL, so a single node caches correctly **without Redis**.
-- **Per-type TTLs:** quotes/orderbook 2s, trades 3s, intraday candles 10s,
-  daily candles 1h, stock info 6h.
-- **L2 — Redis (opt-in, shared):** the same entries in a shared cache, so
-  multiple instances share cache state and a cold node warms instantly. Any
-  Redis error degrades to a cache miss — it never breaks a tool call.
+- `marketdata_upstream_calls_total` — 상단 실제 호출 수(요청보다 적을수록 오프로드가 큼)
+- `marketdata_l2_hits_total` — 공유 캐시 히트
+- Caffeine L1 통계(`cache_gets_total{result="hit"|"miss"}`, 크기, 축출)
 
-Cache keys normalize comma-separated symbols (trim + sort), so `005930,000660`
-and `000660,005930` share one entry.
+[`loadtest/`](loadtest/)에 k6 스크립트·Prometheus+Grafana 스택·정직한 방법론이 있습니다. **실측(WSL 개발머신, 캐시+고정지연 스텁 상단 — 절대 지연이 아니라 비율):** 동일 키 200 동시요청 → 상단 **1회**, 핫키 157,476 요청 → 상단 **1회**·L1 히트율 ≈ **99.998%**. 오프로드·병합 성질은 `LoadOffloadIT`가 CI에서 결정론적으로 담보합니다.
 
-Enable L2 with env vars:
+## 🤝 기여
 
-```bash
-export TOSS_CACHE_L2=true
-export REDIS_HOST=localhost   # default
-export REDIS_PORT=6379        # default
-```
+환영합니다 — [CONTRIBUTING.md](CONTRIBUTING.md)를 봐주세요. `good first issue` 라벨부터 시작하기 좋습니다. 이 저장소에서 작업하는 AI 코딩 에이전트는 [AGENTS.md](AGENTS.md)를 먼저 읽으세요.
 
-Scope note: L1 single-flight is per-node. Cross-node request coalescing is not
-implemented; the shared L2 narrows (but does not eliminate) the concurrent-miss
-window when running multiple instances. The Redis L2 path is covered by
-`RedisL2CacheIT` (Testcontainers), which requires Docker to run.
-
-## Observability & load testing
-
-The HTTP profile exposes Micrometer metrics at `/actuator/prometheus`, including
-domain counters that make cache behavior legible:
-
-- `marketdata_upstream_calls_total` — actual upstream calls (fewer than requests = offload)
-- `marketdata_l2_hits_total` — shared-cache hits
-- Caffeine L1 stats (`cache_gets_total{result="hit"|"miss"}`, size, evictions)
-
-[`loadtest/`](loadtest/) has k6 scripts, a Prometheus + Grafana stack, and a
-`loadtest` profile with a fixed-latency **stub** upstream, so the cache /
-coalescing / virtual-thread path can be driven without real credentials.
-
-**Measured** (WSL2 dev box; cache + 40 ms stub upstream — these are *ratios*, not
-absolute latency claims; full honesty caveats in [loadtest/README](loadtest/README.md)):
-
-- 200 concurrent cold-key requests → **1** upstream call (single-flight)
-- 157,476 requests on one hot key → **1** upstream call, L1 hit ratio ≈ 99.998%
-
-These offload and coalescing properties are guarded deterministically in CI by
-`LoadOffloadIT` — no k6 or Docker required.
-
-## Contributing
-
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Good first issues are labeled [`good first issue`](https://github.com/java-jaydev/toss-invest-mcp/labels/good%20first%20issue).
-
-## License
+## 📜 라이선스
 
 [Apache License 2.0](LICENSE) © 2026 Jinkyu Lee
