@@ -36,6 +36,8 @@ dependencies {
     // 관측성: Micrometer 계측 + /actuator/prometheus 노출 (버전은 Boot BOM 관리)
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
+    // CLI 어댑터(cli 프로파일)의 명령 파싱. AI 없이 터미널에서 같은 서비스 계층을 쓴다.
+    implementation 'info.picocli:picocli:4.7.6'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     // 주문 경로는 계좌 헤더가 실제로 실려 나가는지까지 확인해야 해서 HTTP 수준으로 검증한다.
