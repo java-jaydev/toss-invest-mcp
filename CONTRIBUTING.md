@@ -33,7 +33,7 @@ docs(readme): clarify MCP setup
 ## Guidelines
 
 - **Official API only.** This project uses the Toss Securities *Open API*; do not add unofficial/WTS scraping.
-- **Read-only by default.** Anything that can place orders or move money must sit behind an explicit opt-in safety gate (dry-run → confirm).
+- **Gated by default.** Anything that can place orders or move money must sit behind an explicit opt-in safety gate (dry-run → confirm) — see `toss.trading.*` in `application.yml` for the pattern order tools follow.
 - **No secrets in code.** All credentials come from environment variables.
 
 ## Good first issues

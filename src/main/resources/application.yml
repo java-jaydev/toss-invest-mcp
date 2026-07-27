@@ -22,7 +22,9 @@ spring:
         version: 0.1.0
         instructions: >-
           토스증권 공식 Open API(https://openapi.tossinvest.com) 기반 MCP 서버.
-          공식 API만 사용하며(비공식 WTS 미사용), 기본은 read-only 입니다.
+          공식 API만 사용합니다(비공식 WTS 미사용). 시세 조회 도구는 읽기 전용이고,
+          주문 도구는 기본적으로 꺼져 있어 서버 설정 toss.trading.enabled=true 이면서
+          호출에 execute=true 가 있어야만 실제로 전송됩니다. 그 밖에는 미리보기만 반환합니다.
         stdio: true
 
 toss:
