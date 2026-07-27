@@ -52,6 +52,28 @@ cd toss-invest-mcp
 jar가 없으면(`./gradlew build`를 아직 안 했으면) 스크립트는 안내 메시지를 stderr에 출력하고
 종료 코드 4로 끝납니다.
 
+**JDK 21 이상이 필요합니다(jar의 클래스 파일 버전이 65).** 래퍼는 실행 전에 이를 직접
+확인합니다 — `JAVA_HOME/bin/java` → `PATH`의 `java` → 흔한 설치 위치(`/usr/lib/jvm/java-21-*`)
+순으로 찾아 스펙 버전이 21 이상인 첫 번째 것을 씁니다. 시스템 기본 `java`가 더 낮은
+버전이어도(예: 17), 그 버전으로 JVM을 그냥 띄우지 않습니다 — 클래스 파일 버전이 안 맞아
+JVM이 뜨지도 못하고 종료 코드 **1**로 죽는데, 이 문서의 종료 코드 표에서 1은 오직
+`REJECTED`(주문 거부) 전용이기 때문입니다. 그 혼동을 막기 위해 21 이상을 찾지 못하면
+안내 메시지와 함께 종료 코드 **4**로 끝냅니다. JDK 21+ 를 못 찾을 때:
+
+```
+$ ./toss --help
+JDK 21 이상을 찾지 못했습니다(현재 java 는 그보다 낮은 버전일 수 있습니다).
+JAVA_HOME 을 JDK 21+ 설치 경로로 지정하거나, PATH 의 java 를 그 버전으로 바꾸세요.
+$ echo $?
+4
+```
+
+_The wrapper requires JDK 21+ and checks this itself before running the jar (checking
+`JAVA_HOME`, then `PATH`, then common install locations). If it just launched whatever `java`
+happened to be on PATH, an older JVM would fail to even start and exit with code 1 — which this
+project reserves for `REJECTED`. To avoid that collision, "no JDK 21+ found" exits with code 4
+and a message instead._
+
 래퍼 없이 직접 실행하려면(예: jar 경로가 다르거나 다른 프로파일 옵션을 더 주고 싶을 때):
 
 ```bash
@@ -111,11 +133,15 @@ CLI는 기본값을 바꾸거나 따로 판단하지 않고 있는 그대로 `Tr
 | 1 | `REJECTED` — 안전게이트나 토스가 거부 | `order`, `cancel` |
 | 2 | `UNKNOWN` — 접수 여부 불명(응답을 받지 못함) | `order`, `cancel` |
 | 3 | 사용법 오류 — 필수 인자 누락, 잘못된 값, 알 수 없는 하위 명령 | 전체 |
-| 4 | 그 밖의 실패 — 처리되지 않은 예외(인증 실패, 네트워크 오류 등) | 전체 |
+| 4 | 그 밖의 실패 — 처리되지 않은 예외(인증 실패, 네트워크 오류 등), jar를 못 찾음, `toss` 래퍼가 JDK 21+ 를 못 찾음 | 전체 |
 
 _Exit codes are meant for scripting: 0=success (or order `PLACED`/`DRY_RUN`), 1=`REJECTED`,
 2=`UNKNOWN` (delivery unconfirmed), 3=usage error, 4=any other unhandled failure
-(auth/network)._
+(auth/network, missing jar, or the `toss` wrapper failing to find a JDK 21+ runtime)._
+
+**1은 오직 `REJECTED`에만 쓰인다.** `toss` 래퍼는 실행 전에 JDK 21+ 여부를 직접 확인하므로,
+너무 낮은 버전의 JVM이 뜨다가 죽어서 우연히 종료 코드 1이 나오는 일이 없다 — 그런 경우는
+항상 4로 끝난다. 자세한 확인 절차는 위 "`toss` 래퍼 사용법" 절을 참고하라.
 
 `order`·`cancel`은 실행 전에 상태를 사람이 읽을 수 있게 먼저 찍는다(`status: ...`,
 `reason: ...`), 그다음 상세(미리보기·가드레일 체크리스트·주문번호)를 JSON으로 덧붙인다.

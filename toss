@@ -8,10 +8,62 @@
 #   ./toss order buy 005930 --qty 1 --type limit --price 50000       # 미리보기(기본)
 #   ./toss order buy 005930 --qty 1 --type limit --price 50000 --execute  # 실제 전송
 #
-# 종료 코드: 0=성공, 1=REJECTED, 2=UNKNOWN, 3=사용법 오류, 4=그 밖의 실패.
+# 종료 코드: 0=성공, 1=REJECTED, 2=UNKNOWN, 3=사용법 오류,
+#           4=그 밖의 실패(jar 못 찾음, JDK 21+ 못 찾음 등).
+#
+# 실행에는 JDK 21 이상이 필요하다(jar 의 클래스 파일 버전이 65). 시스템 기본 `java` 가
+# 더 낮은 버전이면(예: 17) JVM 이 뜨지도 못하고 종료 코드 1로 죽는데, 이 저장소의 종료
+# 코드 계약에서 1은 오직 REJECTED(주문 거부) 전용이다. JVM 기동 실패를 그 코드로 새어
+# 나가게 두면 "거부됐다"고 오인해 실매매 스크립트가 잘못된 후속 동작(예: 조건 바꿔 재시도)을
+# 할 위험이 있다. 그래서 java 를 부르기 전에 반드시 21+ 인지 확인하고, 못 찾으면 4로 끝낸다.
 set -euo pipefail
+shopt -s nullglob
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+REQUIRED_JAVA_SPEC=21
+
+# 후보 java 실행 파일의 스펙 버전(java.specification.version)을 출력한다.
+# `java -version`의 문자열(벤더·포맷이 제각각)을 파싱하는 대신, JEP 223 이후 항상
+# 단일 정수인 이 표준 시스템 프로퍼티를 읽는다. 실행 못 하거나 값이 없으면 아무것도
+# 찍지 않는다.
+java_spec_version() {
+    local java_bin="$1"
+    [[ -x "$java_bin" ]] || return 1
+    "$java_bin" -XshowSettings:properties -version 2>&1 \
+        | awk -F'= ' '/java\.specification\.version/ {print $2}' \
+        | tr -d ' '
+}
+
+# 우선순위: JAVA_HOME/bin/java → PATH 의 java → 흔한 설치 위치(/usr/lib/jvm/java-21-*).
+# 이 중 처음으로 스펙 버전이 21 이상인 것을 쓴다.
+find_java21() {
+    local candidates=()
+    [[ -n "${JAVA_HOME:-}" ]] && candidates+=("$JAVA_HOME/bin/java")
+    if command -v java >/dev/null 2>&1; then
+        candidates+=("$(command -v java)")
+    fi
+    candidates+=(/usr/lib/jvm/java-21-*/bin/java /usr/lib/jvm/java-2[1-9]*/bin/java)
+
+    local candidate version
+    for candidate in "${candidates[@]}"; do
+        [[ -x "$candidate" ]] || continue
+        version="$(java_spec_version "$candidate" || true)"
+        # "1.8" 같은 옛 표기(자바 8 이하)는 정규식에 걸리지 않아 자동으로 걸러진다.
+        if [[ "$version" =~ ^[0-9]+$ ]] && (( version >= REQUIRED_JAVA_SPEC )); then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+JAVA_BIN="$(find_java21 || true)"
+if [[ -z "$JAVA_BIN" ]]; then
+    echo "JDK ${REQUIRED_JAVA_SPEC} 이상을 찾지 못했습니다(현재 java 는 그보다 낮은 버전일 수 있습니다)." >&2
+    echo "JAVA_HOME 을 JDK ${REQUIRED_JAVA_SPEC}+ 설치 경로로 지정하거나, PATH 의 java 를 그 버전으로 바꾸세요." >&2
+    exit 4
+fi
 
 JAR="$(find "$DIR/build/libs" -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' 2>/dev/null | sort | head -n1)"
 
@@ -20,4 +72,4 @@ if [[ -z "${JAR:-}" ]]; then
     exit 4
 fi
 
-exec java -jar "$JAR" --spring.profiles.active=cli "$@"
+exec "$JAVA_BIN" -jar "$JAR" --spring.profiles.active=cli "$@"
