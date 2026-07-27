@@ -69,6 +69,15 @@ class CliCommandTest {
         verifyNoInteractions(market);
     }
 
+    @Test
+    void unhandledExceptionFromTheServiceExitsWithCodeFour() {
+        when(market.prices("005930")).thenThrow(new RuntimeException("네트워크 실패"));
+
+        int exitCode = execute("price", "005930");
+
+        assertThat(exitCode).isEqualTo(4);
+    }
+
     // ---- orderbook ----
 
     @Test
