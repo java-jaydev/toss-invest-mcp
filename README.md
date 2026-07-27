@@ -29,6 +29,7 @@ AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open AP
 | [README.en.md](README.en.md) | 🇬🇧 English version |
 | [llms.txt](llms.txt) | 🤖 LLM용 기계가독 인덱스 |
 | [AGENTS.md](AGENTS.md) | 🛠️ 이 저장소에서 작업할 AI 코딩 에이전트용 안내 |
+| [skills/split-buy-strategy/SKILL.md](skills/split-buy-strategy/SKILL.md) | 📐 분할매수(물타기) 전략 스킬 — 에이전트가 따르는 매매 판단 규칙 |
 
 ## ✨ 기능
 
@@ -107,6 +108,12 @@ java-jaydev/toss-invest-mcp` 등). 다만 이 서버는 Java 빌드 결과물(ja
 - **stdio (기본)** — 로컬 MCP 클라이언트용. 프로파일 지정 없이 `./gradlew bootRun`.
 - **Streamable HTTP** — 원격·다중 클라이언트·부하테스트용. `/mcp`에서 MCP 스펙 2025-03-26을 서비스하며, 요청을 **Java 21 가상스레드**로 처리합니다. `./gradlew bootRun --args='--spring.profiles.active=http'` (기본 포트 8080).
 
+> ⚠️ **HTTP 전송에는 인증이 없습니다.** `/mcp` 엔드포인트는 별도 인증 계층 없이 열려 있어,
+> 그 포트에 접근할 수 있는 사람은 누구든 도구를 호출할 수 있습니다. 실매매가 켜진
+> 상태(`toss.trading.enabled=true`)에서 HTTP 프로파일을 실행한다면 **반드시 localhost로만
+> 열어두거나 신뢰할 수 있는 네트워크 뒤에 두세요** — 외부에 그대로 노출하면 누구나 인증 없이
+> 실계좌로 주문을 낼 수 있습니다.
+
 ## 🧰 도구 요약
 
 | 도구 | 설명 | 주요 인자 |
@@ -122,7 +129,12 @@ java-jaydev/toss-invest-mcp` 등). 다만 이 서버는 Java 빌드 결과물(ja
 주문 도구(`placeOrder`·`cancelOrder`)와 계좌 조회 도구(`getOpenOrders`·`getHoldings`·`getBuyingPower`)도
 제공합니다. **주문은 기본적으로 전송되지 않습니다** — 서버 설정 `toss.trading.enabled=true` 와
 호출 인자 `execute=true` 가 모두 있어야 하고, 설정된 금액·횟수 한도 안이어야 합니다.
-자세한 동작은 [도구 레퍼런스](docs/tools.md)를 보세요.
+`toss.trading.enabled`는 환경변수 `TOSS_TRADING_ENABLED=true`로도 켤 수 있습니다 — jar에는
+`false`로 고정 패키징되어 있으므로, stdio로 실행하는 대부분의 사용자에게는 이 환경변수가
+사실상 유일한 킬스위치입니다. **토스증권은 모의투자·샌드박스 환경을 제공하지 않으므로,
+실매매를 켜면 모든 호출이 실제 자금이 오가는 계좌에 그대로 반영됩니다.** 정해진 규칙에 따라
+여러 차수로 나눠 매매하는 전략이 필요하면 [분할매수 전략 스킬](skills/split-buy-strategy/SKILL.md)도
+참고하세요. 자세한 동작은 [도구 레퍼런스](docs/tools.md)를 보세요.
 
 ## ⚡ 캐시 & 요청병합
 

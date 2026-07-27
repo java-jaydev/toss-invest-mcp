@@ -130,8 +130,19 @@ MCP 도구 호출 형식 / MCP `tools/call` shape:
 > ③ 설정된 금액·횟수 한도 이내. 하나라도 어긋나면 전송되지 않습니다.
 > _Order tools preview by default; a real order needs the server switch, `execute=true`, and the configured limits._
 
+> ⚠️ **HTTP 전송에는 인증이 없습니다.** `toss.trading.enabled=true`로 실매매를 켠 채 HTTP
+> 프로파일(`/mcp`)을 실행하면, 그 포트에 접근할 수 있는 사람은 누구나 인증 절차 없이 주문을
+> 낼 수 있습니다. 실매매를 켠 서버는 localhost 밖으로 노출하지 마세요.
+> _The HTTP transport has no authentication. If `toss.trading.enabled=true` while the http
+> profile is running, anyone who can reach that port can place orders with no login. Never
+> expose a live-trading server beyond localhost._
+
 이 도구들은 계좌 일련번호가 필요합니다. 환경변수 `TOSS_ACCOUNT` 로 설정하세요.
 계좌 상태(보유·주문·매수여력)는 캐시하지 않습니다. 주문 직후 값이 바뀌기 때문입니다.
+
+정해진 규칙에 따라 여러 차수로 나눠 매수·매도하는 전략이 필요하면
+[분할매수 전략 스킬](../skills/split-buy-strategy/SKILL.md)을 참고하세요 — 이 도구들을
+어떤 순서로, 어떤 조건일 때 호출할지에 대한 에이전트용 판단 규칙을 담고 있습니다.
 
 ### `placeOrder` — 주문 / place an order
 
@@ -150,6 +161,13 @@ MCP 도구 호출 형식 / MCP `tools/call` shape:
  "guardrail":["주문금액 50000 KRW 가 한도 100000 이하","오늘 주문수 0 가 한도 20 미만","종목 허용목록 미설정(제한 없음)"],
  "orderId":null,"clientOrderId":null}
 ```
+
+`orderType`이 `MARKET`이면 `estimatedNotional`은 최근 체결가(`lastPrice`)로 추정한 값입니다.
+이 가격은 시세 캐시를 거치므로 최대 2초 정도 지난 값일 수 있습니다 — 즉 금액 한도 검사는
+추정치를 기준으로 하며, 실제 체결 금액의 확정 상한이 아닙니다.
+_For `MARKET` orders, `estimatedNotional` comes from the last traded price, which passes through
+the market-data cache and can be up to 2 seconds stale — the notional cap is an estimate, not a
+hard ceiling on the executed value._
 
 `status` 는 넷 중 하나입니다.
 
@@ -181,15 +199,27 @@ MCP 도구 호출 형식 / MCP `tools/call` shape:
 toss:
   account: ${TOSS_ACCOUNT:}
   trading:
-    enabled: false             # 이 값이 true 여야만 주문이 전송된다
+    enabled: ${TOSS_TRADING_ENABLED:false}   # 이 값이 true 여야만 주문이 전송된다
     max-order-notional-krw: 100000
     max-order-notional-usd: 100
     daily-order-count: 20
     symbol-allowlist: []       # 비우면 종목 제한 없음
 ```
 
+`enabled`는 환경변수 `TOSS_TRADING_ENABLED`로 켜고 끕니다(jar 안에는 `false`로 고정
+패키징돼 있습니다). 기본 stdio 전송에서는 MCP 클라이언트가 이 jar 를 하위 프로세스로
+실행하므로, 사용자가 실매매를 켜고 끄는 실질적인 방법은 이 환경변수뿐입니다.
+
 한도를 넘는 주문은 `enabled=true`, `execute=true` 여도 거부됩니다. 한도 위반은 미리보기
 단계에서도 `REJECTED` 로 드러나므로, 실매매를 켠 뒤에 뒤늦게 알게 되는 일이 없습니다.
+
+`daily-order-count` 한도는 서버 프로세스 메모리에서 셉니다 — 프로세스가 재시작되면 0으로
+되돌아갑니다. 기본 stdio 전송에서는 MCP 클라이언트가 서버를 하위 프로세스로 실행하므로,
+이 한도의 실제 수명은 "하루"가 아니라 "그 프로세스가 떠 있는 동안"입니다. 이 한도는 보조
+장치이며, 실질적인 방어선은 킬스위치(`toss.trading.enabled`)와 주문 1건당 금액 한도입니다.
+_The daily-order-count guardrail is counted in process memory and resets on restart — under the
+default stdio transport its real lifetime is a client session, not a calendar day. The real
+defenses are the kill switch and the per-order notional cap._
 
 토스는 모의투자·샌드박스 환경을 제공하지 않습니다. 모든 실제 호출은 실계좌에 그대로
 반영됩니다. _Toss provides no sandbox or paper-trading environment — every live call hits a funded account._
@@ -198,7 +228,17 @@ toss:
 
 ## 캐시 동작 / caching behavior
 
-모든 도구는 항목별 TTL 캐시를 거칩니다(현재가·호가 2초, 체결 3초, 분봉 10초, 일봉 1시간,
-종목정보 6시간). 같은 키의 동시요청은 single-flight로 상단 1회 호출로 병합됩니다. 자세히는
+시세 조회 5종(`getPrices`·`getOrderbook`·`getTrades`·`getCandles`·`getStocks`)만 항목별 TTL
+캐시를 거칩니다(현재가·호가 2초, 체결 3초, 분봉 10초, 일봉 1시간, 종목정보 6시간). 같은 키의
+동시요청은 single-flight로 상단 1회 호출로 병합됩니다. 자세히는
 [README 캐시 섹션](../README.md#-캐시--요청병합) 참고.
-_Each tool is cached with a per-type TTL; concurrent same-key requests coalesce to one upstream call._
+
+**주문·계좌 도구는 캐시와 single-flight를 전혀 타지 않습니다.** `placeOrder`·`cancelOrder`는
+호출될 때마다 그대로 토스로 전송되고, `getOpenOrders`·`getHoldings`·`getBuyingPower`도 매번
+새로 조회합니다 — 동시에 들어온 두 개의 동일한 `placeOrder` 호출이 하나로 합쳐지는 일은
+없습니다(합쳐지면 주문 하나가 조용히 사라집니다).
+
+_Only the 5 market-data tools (`getPrices`, `getOrderbook`, `getTrades`, `getCandles`,
+`getStocks`) are cached with a per-type TTL and single-flight coalescing. Order and account
+tools bypass the cache and single-flight entirely — two concurrent identical `placeOrder` calls
+are never merged into one._

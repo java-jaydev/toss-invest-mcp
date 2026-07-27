@@ -25,6 +25,8 @@ spring:
           공식 API만 사용합니다(비공식 WTS 미사용). 시세 조회 도구는 읽기 전용이고,
           주문 도구는 기본적으로 꺼져 있어 서버 설정 toss.trading.enabled=true 이면서
           호출에 execute=true 가 있어야만 실제로 전송됩니다. 그 밖에는 미리보기만 반환합니다.
+          HTTP 전송(/mcp)에는 인증이 없습니다 — 실매매가 켜져 있다면 localhost 밖으로
+          노출하지 마세요.
         stdio: true
 
 toss:

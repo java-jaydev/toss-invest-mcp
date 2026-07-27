@@ -5,9 +5,9 @@
 Key facts an agent should know before using or modifying this project:
 
 - Language/stack: Java 21, Spring Boot 3.5, Spring AI 1.1 (MCP server), Gradle.
-- Transports: `stdio` (default profile) and Streamable HTTP (`http` profile, MCP spec 2025-03-26 at `/mcp`, Tomcat on Java 21 virtual threads).
+- Transports: `stdio` (default profile) and Streamable HTTP (`http` profile, MCP spec 2025-03-26 at `/mcp`, Tomcat on Java 21 virtual threads). **The `/mcp` endpoint has no authentication** — never expose the http profile beyond localhost while `toss.trading.enabled=true`.
 - 5 read-only market-data tools: `getPrices`, `getOrderbook`, `getTrades`, `getCandles`, `getStocks`. Same tools cover Korea (6-digit codes, KRW) and US (tickers, USD).
-- 5 trading/account tools: `placeOrder`, `cancelOrder`, `getOpenOrders`, `getHoldings`, `getBuyingPower`. Orders are gated: nothing is transmitted unless `toss.trading.enabled=true` AND the call passes `execute=true` AND the configured notional/daily-count guardrails allow it. Otherwise the tool returns a `DRY_RUN` preview. Account reads are never cached. The write path never auto-retries; every order carries a `clientOrderId` idempotency key so the caller can retry safely within 10 minutes. **Toss provides no sandbox or paper-trading environment — every call with the gates open hits a real, funded account.**
+- 5 trading/account tools: `placeOrder`, `cancelOrder`, `getOpenOrders`, `getHoldings`, `getBuyingPower`. Orders are gated: nothing is transmitted unless `toss.trading.enabled=true` (also settable via the `TOSS_TRADING_ENABLED` environment variable — the jar ships with it hard-coded false, so under stdio that env var is effectively the only kill switch) AND the call passes `execute=true` AND the configured notional/daily-count guardrails allow it. Otherwise the tool returns a `DRY_RUN` preview. The daily-count guardrail is counted in process memory and resets on restart — under stdio (client launches the jar as a subprocess) its real lifetime is a client session, not a calendar day; the real defenses are the kill switch and the per-order notional cap. Account reads are never cached. The write path never auto-retries; every order carries a `clientOrderId` idempotency key so the caller can retry safely within 10 minutes. **Toss provides no sandbox or paper-trading environment — every call with the gates open hits a real, funded account.**
 - Auth: OAuth2 client-credentials; secrets via env vars only (`TOSS_CLIENT_ID`, `TOSS_CLIENT_SECRET`, `TOSS_ACCOUNT`). Base URL `https://openapi.tossinvest.com`. The caller's public IP must be allowlisted in the Toss console.
 - Caching: two-tier (Caffeine `AsyncCache` L1 + optional Redis L2) with per-node single-flight coalescing and per-type TTLs. L1 loading runs on virtual threads off the ConcurrentHashMap monitor (no carrier pinning on JDK 21).
 - Observability: Micrometer + `/actuator/prometheus` (http profile). Key metric `marketdata_upstream_calls_total` (upstream calls; lower than request count = cache offload).
@@ -19,6 +19,7 @@ Key facts an agent should know before using or modifying this project:
 - [Tool reference](docs/tools.md): each tool's schema plus real request/response examples.
 - [Beginner / vibe-coding guide](docs/vibe-coding.md): step-by-step setup for non-developers, with troubleshooting.
 - [Agent guide](AGENTS.md): build/test/run commands, project layout, and conventions for coding agents.
+- [Split-buy strategy skill](skills/split-buy-strategy/SKILL.md): bundled agent playbook for an averaging-down order strategy, built on the trading tools above (Korean).
 
 ## Architecture
 
