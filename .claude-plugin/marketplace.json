@@ -1,0 +1,17 @@
+{
+  "name": "toss-invest-mcp",
+  "owner": {
+    "name": "Jinkyu Lee",
+    "url": "https://github.com/java-jaydev"
+  },
+  "plugins": [
+    {
+      "name": "toss-invest-mcp",
+      "source": "./",
+      "description": "Toss Securities Open API MCP server: Korean/US market-data tools (read-only) plus order/account tools (off by default). Needs a one-time `./gradlew build` with JDK 21 after install — see docs/install-plugins.md.",
+      "version": "0.1.0",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/java-jaydev/toss-invest-mcp"
+    }
+  ]
+}

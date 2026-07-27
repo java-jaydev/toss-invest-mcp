@@ -25,6 +25,7 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **Beginner guide** — set it up by *asking an AI to do it*, even if the terminal is new to you (Korean) |
 | [docs/tools.md](docs/tools.md) | 🧰 Full reference for all 10 tools (5 market-data + 5 trading/account) + request/response examples |
+| [docs/install-plugins.md](docs/install-plugins.md) | 🔌 Install as a **plugin** for Claude Code or Codex CLI (build step, credentials, IP allowlist, enabling live trading — Korean) |
 | [README.md](README.md) | 🇰🇷 Korean version |
 | [llms.txt](llms.txt) | 🤖 Machine-readable index for LLMs |
 | [AGENTS.md](AGENTS.md) | 🛠️ Guide for AI coding agents working on this repo |
@@ -85,6 +86,16 @@ Add to your MCP config (`.mcp.json` or client settings). Make sure `java` resolv
 
 > ⚠️ **Java 21 runtime required.** The jar is class-file version 65; older JVMs fail immediately with
 > `UnsupportedClassVersionError`. Verify the `"command": "java"` in your MCP config points to a 21+ JVM.
+
+### 🔌 Installing as a plugin
+
+Both Claude Code and Codex CLI can install this repo from its bundled marketplace (e.g. `/plugin
+marketplace add java-jaydev/toss-invest-mcp`). That said, this server runs a Java build artifact
+(a jar), so **installing the plugin does not remove the build step above** — this is not marketed
+as zero-install. Credential handling, what's confirmed vs. unconfirmed on the Codex side, and how
+to deliberately enable live trading are all covered in the
+[plugin installation guide](docs/install-plugins.md) (Korean, with literal commands/config in
+English).
 
 ## 🔌 Transports
 

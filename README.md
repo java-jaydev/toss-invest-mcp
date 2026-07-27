@@ -25,6 +25,7 @@ AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open AP
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **비개발자용 초친절 가이드** — 터미널이 낯설어도 AI에게 부탁해서 세팅하는 법 |
 | [docs/tools.md](docs/tools.md) | 🧰 도구 10개(시세 조회 5 + 주문·계좌 5) 상세 레퍼런스 + 요청/응답 예시 |
+| [docs/install-plugins.md](docs/install-plugins.md) | 🔌 Claude Code·Codex CLI **플러그인/마켓플레이스**로 설치하기(빌드 단계·자격증명·IP 허용목록·실매매 활성화 포함) |
 | [README.en.md](README.en.md) | 🇬🇧 English version |
 | [llms.txt](llms.txt) | 🤖 LLM용 기계가독 인덱스 |
 | [AGENTS.md](AGENTS.md) | 🛠️ 이 저장소에서 작업할 AI 코딩 에이전트용 안내 |
@@ -90,6 +91,14 @@ MCP 설정 파일(`.mcp.json` 또는 클라이언트 설정)에 추가합니다.
 
 > ⚠️ **Java 21 런타임 필수.** jar는 클래스파일 버전 65로 컴파일됩니다. 더 낮은 JVM에서 실행하면
 > 즉시 `UnsupportedClassVersionError`로 실패합니다. MCP 설정의 `"command": "java"`가 21+를 가리키는지 확인하세요.
+
+### 🔌 플러그인으로 설치하고 싶다면
+
+Claude Code와 Codex CLI 양쪽 모두에 마켓플레이스로 설치할 수 있습니다(`/plugin marketplace add
+java-jaydev/toss-invest-mcp` 등). 다만 이 서버는 Java 빌드 결과물(jar)을 실행하는 프로그램이라
+**플러그인을 설치해도 위 1단계의 빌드는 그대로 필요합니다** — "제로 설치"라고 포장하지 않습니다.
+자격증명 입력 방식, Codex 쪽에서 확인되지 않은 부분, 실매매를 의도적으로 켜는 법까지
+[플러그인 설치 가이드](docs/install-plugins.md)에 정리했습니다.
 
 ## 🔌 전송 방식 (Transports)
 
