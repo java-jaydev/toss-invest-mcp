@@ -38,6 +38,8 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // 주문 경로는 계좌 헤더가 실제로 실려 나가는지까지 확인해야 해서 HTTP 수준으로 검증한다.
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
 }
