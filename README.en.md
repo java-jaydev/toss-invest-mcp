@@ -25,6 +25,7 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **Beginner guide** — set it up by *asking an AI to do it*, even if the terminal is new to you (Korean) |
 | [docs/tools.md](docs/tools.md) | 🧰 Full reference for all 10 tools (5 market-data + 5 trading/account) + request/response examples |
+| [docs/cli.md](docs/cli.md) | 💻 **CLI mode for using this without an AI agent** — command table, exit codes, credentials/IP allowlist, enabling live trading (Korean, with literal commands/flags in English) |
 | [docs/install-plugins.md](docs/install-plugins.md) | 🔌 Install as a **plugin** for Claude Code or Codex CLI (build step, credentials, IP allowlist, enabling live trading — Korean) |
 | [README.md](README.md) | 🇰🇷 Korean version |
 | [llms.txt](llms.txt) | 🤖 Machine-readable index for LLMs |
@@ -109,6 +110,15 @@ One artifact serves both, selected by Spring profile.
 > own — anyone who can reach that port can call any tool. If you run the http profile while live
 > trading is enabled (`toss.trading.enabled=true`), **bind it to localhost only or put it behind
 > a trusted network** — exposed to the open internet, anyone can place real orders with no login.
+
+## 💻 CLI mode (no AI agent required)
+
+The same core (`MarketDataService`, `TradingService`) is also reachable as a one-shot
+command-line tool. After `./gradlew build`, the `./toss` wrapper script at the repository root
+lets you run `./toss price 005930` directly, and place orders once the same safety gates allow
+it — the kill switch and limits are identical to the MCP tools. See
+[docs/cli.md](docs/cli.md) (Korean, with literal commands/flags in English) for the command
+table, exit codes, credentials, and how to deliberately enable live trading and what that risks.
 
 ## 🧰 Tools at a glance
 

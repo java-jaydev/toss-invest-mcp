@@ -25,6 +25,7 @@ AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open AP
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **비개발자용 초친절 가이드** — 터미널이 낯설어도 AI에게 부탁해서 세팅하는 법 |
 | [docs/tools.md](docs/tools.md) | 🧰 도구 10개(시세 조회 5 + 주문·계좌 5) 상세 레퍼런스 + 요청/응답 예시 |
+| [docs/cli.md](docs/cli.md) | 💻 **AI 없이 터미널에서 쓰는 CLI 모드** — 명령 표·종료 코드·자격증명/IP 허용목록·실매매 활성화 |
 | [docs/install-plugins.md](docs/install-plugins.md) | 🔌 Claude Code·Codex CLI **플러그인/마켓플레이스**로 설치하기(빌드 단계·자격증명·IP 허용목록·실매매 활성화 포함) |
 | [README.en.md](README.en.md) | 🇬🇧 English version |
 | [llms.txt](llms.txt) | 🤖 LLM용 기계가독 인덱스 |
@@ -113,6 +114,13 @@ java-jaydev/toss-invest-mcp` 등). 다만 이 서버는 Java 빌드 결과물(ja
 > 상태(`toss.trading.enabled=true`)에서 HTTP 프로파일을 실행한다면 **반드시 localhost로만
 > 열어두거나 신뢰할 수 있는 네트워크 뒤에 두세요** — 외부에 그대로 노출하면 누구나 인증 없이
 > 실계좌로 주문을 낼 수 있습니다.
+
+## 💻 CLI 모드 (AI 없이 쓰기)
+
+같은 코어(`MarketDataService`·`TradingService`)를 CLI로도 쓸 수 있습니다. `./gradlew build`
+후 저장소 루트의 `./toss` 래퍼로 `./toss price 005930`처럼 바로 시세를 조회하거나, 안전게이트를
+통과하면 주문도 낼 수 있습니다 — MCP 도구와 같은 킬스위치·한도가 그대로 적용됩니다. 명령
+표·종료 코드·자격증명·실매매를 켜는 법과 그 위험은 [docs/cli.md](docs/cli.md)를 보세요.
 
 ## 🧰 도구 요약
 

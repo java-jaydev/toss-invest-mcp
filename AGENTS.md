@@ -13,6 +13,7 @@ An MCP server (Java 21 + Spring Boot + Spring AI) exposing the Toss Securities O
 ./gradlew test                                           # tests only
 ./gradlew bootRun                                        # run as stdio MCP server (default)
 ./gradlew bootRun --args='--spring.profiles.active=http' # run Streamable HTTP on :8080
+./toss price 005930                                      # one-shot CLI mode (cli profile); build first
 ```
 
 - **JDK 21 is required**, at runtime too (virtual threads; class-file version 65). Gradle's toolchain provisions 21 for build/test even if the default `java` is older.
@@ -33,10 +34,12 @@ src/main/java/dev/jaydev/tossmcp/
   auth/TossAuthService.java    # OAuth2 client-credentials token cache/refresh
   config/TossProperties.java   # toss.* config binding
   config/TossTradingProperties.java # toss.trading.* config binding (safety limits)
+  cli/                         # picocli CLI adapter: TossCli, MarketCommands, AccountCommands, OrderCommands, CliRunner (cli profile only)
   loadtest/                    # stub upstream + HTTP shim (loadtest profile only; not in production)
-src/main/resources/            # application.yml (stdio), application-http.yml, application-loadtest.yml
+src/main/resources/            # application.yml (stdio), application-http.yml, application-loadtest.yml, application-cli.yml
+toss                            # wrapper script for the CLI mode (adds --spring.profiles.active=cli)
 loadtest/                      # k6 scripts, Prometheus/Grafana, methodology
-docs/                          # tools.md, vibe-coding.md
+docs/                          # tools.md, cli.md, vibe-coding.md
 skills/                        # bundled MCP-agent skills (e.g. split-buy-strategy)
 ```
 
