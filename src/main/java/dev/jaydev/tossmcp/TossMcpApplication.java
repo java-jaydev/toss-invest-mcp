@@ -1,6 +1,7 @@
 package dev.jaydev.tossmcp;
 
 import dev.jaydev.tossmcp.tools.MarketDataTools;
+import dev.jaydev.tossmcp.tools.TradingTools;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.boot.SpringApplication;
@@ -23,9 +24,9 @@ public class TossMcpApplication {
      * 도구 그룹을 추가할 때마다 toolObjects 에 빈을 더한다.
      */
     @Bean
-    ToolCallbackProvider tossTools(MarketDataTools marketDataTools) {
+    ToolCallbackProvider tossTools(MarketDataTools marketDataTools, TradingTools tradingTools) {
         return MethodToolCallbackProvider.builder()
-                .toolObjects(marketDataTools)
+                .toolObjects(marketDataTools, tradingTools)
                 .build();
     }
 
