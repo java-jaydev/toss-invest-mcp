@@ -46,6 +46,11 @@ public final class TossCli implements Runnable {
         cli.addSubcommand("trades", new MarketCommands.Trades(market));
         cli.addSubcommand("candles", new MarketCommands.Candles(market));
         cli.addSubcommand("stocks", new MarketCommands.Stocks(market));
+        cli.addSubcommand("holdings", new AccountCommands.Holdings(trading));
+        cli.addSubcommand("buying-power", new AccountCommands.BuyingPower(trading));
+        cli.addSubcommand("orders", new AccountCommands.Orders(trading));
+        cli.addSubcommand("order", new OrderCommands.Order(trading));
+        cli.addSubcommand("cancel", new OrderCommands.Cancel(trading));
         return cli;
     }
 }

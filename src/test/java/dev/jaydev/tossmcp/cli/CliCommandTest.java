@@ -2,11 +2,14 @@ package dev.jaydev.tossmcp.cli;
 
 import dev.jaydev.tossmcp.service.MarketDataService;
 import dev.jaydev.tossmcp.service.TradingService;
+import dev.jaydev.tossmcp.trading.OrderResult;
+import dev.jaydev.tossmcp.trading.OrderResult.Status;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -155,5 +158,148 @@ class CliCommandTest {
         assertThat(exitCode).isEqualTo(3);
         verifyNoInteractions(market);
         verifyNoInteractions(trading);
+    }
+
+    // ---- holdings / buying-power / orders ----
+
+    @Test
+    void holdingsDelegatesToTradingServiceAndPrintsResult() {
+        when(trading.holdings(isNull())).thenReturn("{\"result\":{}}");
+
+        int exitCode = execute("holdings");
+
+        assertThat(exitCode).isZero();
+        assertThat(out.toString()).contains("result");
+        verify(trading).holdings(null);
+    }
+
+    @Test
+    void holdingsWithSymbolOptionDelegatesTheSymbol() {
+        when(trading.holdings("005930")).thenReturn("{\"result\":{}}");
+
+        int exitCode = execute("holdings", "--symbol", "005930");
+
+        assertThat(exitCode).isZero();
+        verify(trading).holdings("005930");
+    }
+
+    @Test
+    void buyingPowerDelegatesToTradingServiceAndPrintsResult() {
+        when(trading.buyingPower("KRW")).thenReturn("{\"result\":{}}");
+
+        int exitCode = execute("buying-power", "KRW");
+
+        assertThat(exitCode).isZero();
+        verify(trading).buyingPower("KRW");
+    }
+
+    @Test
+    void buyingPowerWithoutCurrencyIsAUsageErrorAndDoesNotCallTheService() {
+        int exitCode = execute("buying-power");
+
+        assertThat(exitCode).isEqualTo(3);
+        verifyNoInteractions(trading);
+    }
+
+    @Test
+    void ordersDelegatesWithSymbolAndLimitOptions() {
+        when(trading.openOrders("005930", 5)).thenReturn("{\"result\":[]}");
+
+        int exitCode = execute("orders", "--symbol", "005930", "--limit", "5");
+
+        assertThat(exitCode).isZero();
+        verify(trading).openOrders("005930", 5);
+    }
+
+    // ---- order ----
+
+    @Test
+    void orderWithoutExecuteFlagPassesExecuteFalse() {
+        when(trading.placeOrder(eq("005930"), eq("buy"), eq("1"), eq("limit"), eq("50000"), eq(false)))
+                .thenReturn(new OrderResult(Status.DRY_RUN, "미리보기입니다.", null, List.of(), null, null));
+
+        int exitCode = execute("order", "buy", "005930", "--qty", "1", "--type", "limit", "--price", "50000");
+
+        assertThat(exitCode).isZero();
+        verify(trading).placeOrder("005930", "buy", "1", "limit", "50000", false);
+    }
+
+    @Test
+    void orderWithExecuteFlagPassesExecuteTrue() {
+        when(trading.placeOrder(eq("005930"), eq("buy"), eq("1"), eq("limit"), eq("50000"), eq(true)))
+                .thenReturn(new OrderResult(Status.PLACED, "주문이 접수되었습니다.", null, List.of(), "ord-1", "cid-1"));
+
+        int exitCode = execute("order", "buy", "005930", "--qty", "1", "--type", "limit", "--price", "50000",
+                "--execute");
+
+        assertThat(exitCode).isZero();
+        verify(trading).placeOrder("005930", "buy", "1", "limit", "50000", true);
+    }
+
+    @Test
+    void orderRejectedByTheCoreExitsWithCodeOne() {
+        when(trading.placeOrder(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new OrderResult(Status.REJECTED, "일일 주문 한도를 초과했습니다.", null,
+                        List.of("daily-count: FAIL"), null, null));
+
+        int exitCode = execute("order", "buy", "005930", "--qty", "1", "--type", "limit", "--price", "50000",
+                "--execute");
+
+        assertThat(exitCode).isEqualTo(1);
+        assertThat(out.toString()).contains("status: REJECTED").contains("일일 주문 한도를 초과했습니다.");
+    }
+
+    @Test
+    void orderUnknownFromTheCoreExitsWithCodeTwo() {
+        when(trading.placeOrder(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new OrderResult(Status.UNKNOWN, "응답을 받지 못했습니다.", null, List.of(), null, "cid-2"));
+
+        int exitCode = execute("order", "buy", "005930", "--qty", "1", "--type", "market", "--execute");
+
+        assertThat(exitCode).isEqualTo(2);
+        assertThat(out.toString()).contains("status: UNKNOWN").contains("응답을 받지 못했습니다.");
+    }
+
+    @Test
+    void limitOrderWithoutPriceIsAUsageErrorAndDoesNotCallTheService() {
+        int exitCode = execute("order", "buy", "005930", "--qty", "1", "--type", "limit");
+
+        assertThat(exitCode).isEqualTo(3);
+        verify(trading, never()).placeOrder(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void marketOrderWithoutPriceDoesNotNeedTheUsageCheck() {
+        when(trading.placeOrder(eq("005930"), eq("buy"), eq("1"), eq("market"), isNull(), eq(false)))
+                .thenReturn(new OrderResult(Status.DRY_RUN, "미리보기입니다.", null, List.of(), null, null));
+
+        int exitCode = execute("order", "buy", "005930", "--qty", "1", "--type", "market");
+
+        assertThat(exitCode).isZero();
+        verify(trading).placeOrder("005930", "buy", "1", "market", null, false);
+    }
+
+    // ---- cancel ----
+
+    @Test
+    void cancelWithoutExecuteFlagIsAPreview() {
+        when(trading.cancelOrder(eq("order-1"), eq(false)))
+                .thenReturn(new OrderResult(Status.DRY_RUN, "미리보기입니다.", null, List.of(), "order-1", null));
+
+        int exitCode = execute("cancel", "order-1");
+
+        assertThat(exitCode).isZero();
+        verify(trading).cancelOrder("order-1", false);
+    }
+
+    @Test
+    void cancelWithExecuteFlagPassesExecuteTrue() {
+        when(trading.cancelOrder(eq("order-1"), eq(true)))
+                .thenReturn(new OrderResult(Status.PLACED, "취소가 접수되었습니다.", null, List.of(), "order-1", null));
+
+        int exitCode = execute("cancel", "order-1", "--execute");
+
+        assertThat(exitCode).isZero();
+        verify(trading).cancelOrder("order-1", true);
     }
 }
