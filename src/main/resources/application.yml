@@ -30,6 +30,13 @@ toss:
   client-id: ${TOSS_CLIENT_ID:}
   client-secret: ${TOSS_CLIENT_SECRET:}
   account: ${TOSS_ACCOUNT:}
+  # 실매매 안전장치. 기본은 꺼짐이며, 켜더라도 아래 한도를 넘는 주문은 거부된다.
+  trading:
+    enabled: ${TOSS_TRADING_ENABLED:false}
+    max-order-notional-krw: 100000
+    max-order-notional-usd: 100
+    daily-order-count: 20
+    symbol-allowlist: []
   cache:
     l2:
       enabled: ${TOSS_CACHE_L2:false}
