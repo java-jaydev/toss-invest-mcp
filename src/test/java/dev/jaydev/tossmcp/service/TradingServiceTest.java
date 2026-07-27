@@ -111,6 +111,33 @@ class TradingServiceTest {
     }
 
     @Test
+    void usTickerOverUsdCapIsRejectedAndNeverSent() {
+        // 미국 티커는 USD 한도(100)로 검증돼야 한다. KRW 한도로 새면 100배 넘는 금액이 통과한다.
+        OrderResult result = service(true)
+                .placeOrder("AAPL", "BUY", "1", "LIMIT", "101", true);
+
+        assertThat(result.status()).isEqualTo(Status.REJECTED);
+        assertThat(result.wouldPlace().currency()).isEqualTo("USD");
+        verify(api, never()).placeOrder(any());
+    }
+
+    @Test
+    void currencyIsUsdForNonKoreanSymbol() {
+        OrderResult result = service(true)
+                .placeOrder("AAPL", "BUY", "1", "LIMIT", "50", false);
+
+        assertThat(result.wouldPlace().currency()).isEqualTo("USD");
+    }
+
+    @Test
+    void currencyIsKrwForDomesticSixDigitSymbol() {
+        OrderResult result = service(true)
+                .placeOrder("005930", "BUY", "1", "LIMIT", "50000", false);
+
+        assertThat(result.wouldPlace().currency()).isEqualTo("KRW");
+    }
+
+    @Test
     void limitOrderWithoutPriceIsRejected() {
         OrderResult result = service(true)
                 .placeOrder("005930", "BUY", "1", "LIMIT", null, true);
@@ -159,6 +186,16 @@ class TradingServiceTest {
 
         assertThat(result.status()).isEqualTo(Status.PLACED);
         verify(api).cancelOrder("abc-123");
+    }
+
+    @Test
+    void cancelWithoutExecuteIsPreviewOnlyWhenTradingEnabled() {
+        // 실매매가 켜져 있어도 execute 를 주지 않으면(에이전트가 먼저 미리보기만 하는 경우)
+        // 실제 취소가 나가면 안 된다.
+        OrderResult result = service(true).cancelOrder("abc-123", null);
+
+        assertThat(result.status()).isEqualTo(Status.DRY_RUN);
+        verify(api, never()).cancelOrder(anyString());
     }
 
     @Test
@@ -240,6 +277,22 @@ class TradingServiceTest {
 
         assertThat(result.status()).isEqualTo(Status.UNKNOWN);
         assertThat(counter.current()).isEqualTo(1);
+    }
+
+    @Test
+    void placeOrderRejectedWhenDailyCounterAtLimit() {
+        // 카운터가 실제로 가드에 배선돼 있는지 증명한다: 한도까지 채운 뒤 다음 주문은 막혀야 한다.
+        DailyOrderCounter counter = new DailyOrderCounter(FIXED);
+        for (int i = 0; i < 20; i++) {
+            counter.increment();
+        }
+        TradingService service = new TradingService(api, market, new OrderGuard(enabledProps()),
+                counter, new OrderRateLimiter(FIXED));
+
+        OrderResult result = service.placeOrder("005930", "BUY", "1", "LIMIT", "50000", true);
+
+        assertThat(result.status()).isEqualTo(Status.REJECTED);
+        verify(api, never()).placeOrder(any());
     }
 
     @Test

@@ -40,7 +40,15 @@ public class OrderGuard {
                     "주문 금액을 산출하지 못해(시세 조회 실패) 한도를 검증할 수 없습니다.", checks);
         }
 
-        BigDecimal cap = "USD".equals(currency) ? props.maxOrderNotionalUsd() : props.maxOrderNotionalKrw();
+        BigDecimal cap;
+        if ("USD".equals(currency)) {
+            cap = props.maxOrderNotionalUsd();
+        } else if ("KRW".equals(currency)) {
+            cap = props.maxOrderNotionalKrw();
+        } else {
+            return new GuardDecision(Outcome.REJECT,
+                    "알 수 없는 통화(" + currency + ") 는 한도를 판단할 수 없어 주문을 거부합니다.", checks);
+        }
         if (notional.compareTo(cap) > 0) {
             return new GuardDecision(Outcome.REJECT,
                     "주문 금액 " + notional.toPlainString() + " " + currency

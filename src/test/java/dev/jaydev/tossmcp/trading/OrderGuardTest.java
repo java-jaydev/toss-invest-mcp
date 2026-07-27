@@ -127,4 +127,21 @@ class OrderGuardTest {
 
         assertThat(d.outcome()).isEqualTo(Outcome.DRY_RUN);
     }
+
+    @Test
+    void cancelWithoutExecuteFlagIsDryRunWhenTradingEnabled() {
+        GuardDecision d = guard(true, List.of()).evaluateCancel(false);
+
+        assertThat(d.outcome()).isEqualTo(Outcome.DRY_RUN);
+        assertThat(d.reason()).contains("execute=true");
+    }
+
+    @Test
+    void unknownCurrencyIsRejectedRatherThanDefaultingToKrwCap() {
+        // 통화가 "USD"/"KRW" 둘 다 아니면 한도를 판단할 수 없으니 막아야 한다(모르면 막는다).
+        GuardDecision d = guard(true, List.of())
+                .evaluatePlace(buy(true), new BigDecimal("50000"), "JPY", 0);
+
+        assertThat(d.outcome()).isEqualTo(Outcome.REJECT);
+    }
 }
