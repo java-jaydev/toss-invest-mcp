@@ -8,6 +8,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.Bean;
 
+import java.time.Clock;
+
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class TossMcpApplication {
@@ -25,5 +27,14 @@ public class TossMcpApplication {
         return MethodToolCallbackProvider.builder()
                 .toolObjects(marketDataTools)
                 .build();
+    }
+
+    /**
+     * 시간에 의존하는 로직(주문 카운터·레이트리밋)이 테스트에서 시간을 고정할 수 있도록
+     * 시계를 주입 가능한 빈으로 둔다.
+     */
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
     }
 }
