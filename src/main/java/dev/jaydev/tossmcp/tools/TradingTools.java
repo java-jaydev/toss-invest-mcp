@@ -35,7 +35,7 @@ public class TradingTools {
         return toJson(trading.placeOrder(symbol, side, quantity, orderType, price, execute));
     }
 
-    @Tool(description = "접수된 주문을 취소한다. 기본은 미리보기이며 실제로 취소하려면 execute=true 가 필요하다.")
+    @Tool(description = "접수된 주문을 취소한다. 기본은 미리보기(dry-run)이며, 실제로 취소하려면 execute=true 가 필요하고 서버에서 실매매가 켜져 있어야 한다.")
     public String cancelOrder(
             @ToolParam(description = "취소할 주문의 식별자") String orderId,
             @ToolParam(description = "true 여야 실제로 취소한다. 기본은 false(미리보기)", required = false) Boolean execute) {

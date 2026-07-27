@@ -43,6 +43,9 @@ class TradingToolsTest {
 
         assertThat(json).contains("\"status\":\"DRY_RUN\"");
         assertThat(json).contains("미리보기입니다.");
+        // 인자 순서 고정: quantity 와 orderType 은 둘 다 String 이라 뒤바뀌어도 컴파일·기존 단언이 통과한다.
+        // 실계좌로 나가는 유일한 쓰기 경로이므로 위치까지 정확히 전달됐는지 직접 검증한다.
+        verify(trading).placeOrder(eq("005930"), eq("BUY"), eq("1"), eq("LIMIT"), eq("50000"), isNull());
     }
 
     @Test
@@ -50,10 +53,22 @@ class TradingToolsTest {
         when(trading.holdings(isNull())).thenReturn("{\"result\":{}}");
         when(trading.buyingPower(eq("KRW"))).thenReturn("{\"result\":{}}");
 
-        tools.getHoldings(null);
-        tools.getBuyingPower("KRW");
+        String holdings = tools.getHoldings(null);
+        String buyingPower = tools.getBuyingPower("KRW");
 
+        assertThat(holdings).isEqualTo("{\"result\":{}}");
+        assertThat(buyingPower).isEqualTo("{\"result\":{}}");
         verify(trading).holdings(null);
         verify(trading).buyingPower("KRW");
+    }
+
+    @Test
+    void getOpenOrdersDelegatesStraightToTheService() {
+        when(trading.openOrders(eq("005930"), eq(10))).thenReturn("{\"result\":[]}");
+
+        String openOrders = tools.getOpenOrders("005930", 10);
+
+        assertThat(openOrders).isEqualTo("{\"result\":[]}");
+        verify(trading).openOrders("005930", 10);
     }
 }
