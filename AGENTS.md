@@ -4,7 +4,7 @@ Guidance for AI coding agents working on **toss-invest-mcp**. Human contributors
 
 ## What this project is
 
-An MCP server (Java 21 + Spring Boot + Spring AI) exposing Toss Securities Open API market data as read-only MCP tools. See [llms.txt](llms.txt) for a compact fact sheet and [README.md](README.md) for the overview.
+An MCP server (Java 21 + Spring Boot + Spring AI) exposing the Toss Securities Open API: read-only market-data tools plus order/account tools that are off by default (see Scope below). See [llms.txt](llms.txt) for a compact fact sheet and [README.md](README.md) for the overview.
 
 ## Setup, build, run, test
 
@@ -24,8 +24,10 @@ An MCP server (Java 21 + Spring Boot + Spring AI) exposing Toss Securities Open 
 src/main/java/dev/jaydev/tossmcp/
   TossMcpApplication.java      # @SpringBootApplication; registers @Tool beans
   tools/MarketDataTools.java   # MCP @Tool definitions (the 5 tools)
+  tools/TradingTools.java      # MCP @Tool definitions for orders and account reads
   service/MarketDataService.java # per-type TTLs + symbol normalization
   cache/                       # MarketDataCache (Caffeine AsyncCache L1 + single-flight), L2Cache/RedisL2Cache/NoOpL2Cache
+  trading/                     # OrderGuard (safety gates), DailyOrderCounter, OrderRateLimiter, OrderResult
   client/TossApiClient.java    # REST wrapper over the Toss Open API
   auth/TossAuthService.java    # OAuth2 client-credentials token cache/refresh
   config/TossProperties.java   # toss.* config binding
@@ -47,7 +49,12 @@ docs/                          # tools.md, vibe-coding.md
 - **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`…), imperative mood. Do not add auto-generated attribution or tool boilerplate to messages.
 - **Docs honesty:** never document features that don't exist, and never present benchmark numbers without their environment caveat. Published load numbers are *ratios* (cache offload), not absolute latency — see [loadtest/README.md](loadtest/README.md).
 - **Plain language:** spell out abbreviations on first use; assume the reader is new to the domain.
-- **Scope:** official API only (no unofficial WTS scraping); read-only tools first. Account/order tools must sit behind explicit opt-in safety gates.
+- **Scope:** official API only (no unofficial WTS scraping). Market-data tools are read-only.
+  Order tools exist but are off by default: an order is transmitted only when
+  `toss.trading.enabled=true`, the call passes `execute=true`, and the configured notional and
+  daily-count limits allow it. Never weaken those gates, never send `confirmHighValueOrder`,
+  and never add automatic retries to the write path — `clientOrderId` makes a caller-driven
+  retry safe instead.
 
 ## Adding a tool
 

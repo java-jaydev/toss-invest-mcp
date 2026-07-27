@@ -9,7 +9,7 @@
 
 AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open API**로 **한국·미국 주식 시세**를 조회하게 해주는 **MCP(Model Context Protocol) 서버**입니다.
 
-**Java 21 + Spring Boot + Spring AI**로 만들었습니다. 공식 API만 사용하고(비공식 WTS 미사용), 기본은 읽기 전용입니다.
+**Java 21 + Spring Boot + Spring AI**로 만들었습니다. 공식 API만 사용합니다(비공식 WTS 미사용). 시세 조회는 항상 가능하고, 주문 전송은 기본적으로 꺼져 있습니다(설정과 호출 인자로 명시적으로 켜야 합니다).
 
 ---
 
@@ -24,7 +24,7 @@ AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open AP
 | 문서 | 내용 |
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **비개발자용 초친절 가이드** — 터미널이 낯설어도 AI에게 부탁해서 세팅하는 법 |
-| [docs/tools.md](docs/tools.md) | 🧰 5개 도구 상세 레퍼런스 + 실제 요청/응답 예시 |
+| [docs/tools.md](docs/tools.md) | 🧰 도구 10개(시세 조회 5 + 주문·계좌 5) 상세 레퍼런스 + 요청/응답 예시 |
 | [README.en.md](README.en.md) | 🇬🇧 English version |
 | [llms.txt](llms.txt) | 🤖 LLM용 기계가독 인덱스 |
 | [AGENTS.md](AGENTS.md) | 🛠️ 이 저장소에서 작업할 AI 코딩 에이전트용 안내 |
@@ -109,6 +109,11 @@ MCP 설정 파일(`.mcp.json` 또는 클라이언트 설정)에 추가합니다.
 | `getStocks` | 종목 기본정보 | `symbols`(콤마, 최대 200) |
 
 → 요청/응답 실제 예시는 **[docs/tools.md](docs/tools.md)** 참고.
+
+주문 도구(`placeOrder`·`cancelOrder`)와 계좌 조회 도구(`getOpenOrders`·`getHoldings`·`getBuyingPower`)도
+제공합니다. **주문은 기본적으로 전송되지 않습니다** — 서버 설정 `toss.trading.enabled=true` 와
+호출 인자 `execute=true` 가 모두 있어야 하고, 설정된 금액·횟수 한도 안이어야 합니다.
+자세한 동작은 [도구 레퍼런스](docs/tools.md)를 보세요.
 
 ## ⚡ 캐시 & 요청병합
 

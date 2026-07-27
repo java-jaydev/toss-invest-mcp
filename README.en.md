@@ -9,7 +9,7 @@
 
 A **Model Context Protocol (MCP) server** that lets AI agents (Claude Code, Cursor, Codex, …) query **Korean and US stock-market data** through the official **Toss Securities Open API**.
 
-Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Read-only by default.
+Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Market data is always available; order transmission is off by default and must be explicitly enabled via configuration and a call argument.
 
 ---
 
@@ -24,7 +24,7 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 | Doc | What's inside |
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **Beginner guide** — set it up by *asking an AI to do it*, even if the terminal is new to you (Korean) |
-| [docs/tools.md](docs/tools.md) | 🧰 Full reference for all 5 tools + real request/response examples |
+| [docs/tools.md](docs/tools.md) | 🧰 Full reference for all 10 tools (5 market-data + 5 trading/account) + request/response examples |
 | [README.md](README.md) | 🇰🇷 Korean version |
 | [llms.txt](llms.txt) | 🤖 Machine-readable index for LLMs |
 | [AGENTS.md](AGENTS.md) | 🛠️ Guide for AI coding agents working on this repo |
@@ -104,6 +104,11 @@ One artifact serves both, selected by Spring profile.
 | `getStocks` | Instrument info | `symbols` (comma, ≤200) |
 
 → Real request/response examples in **[docs/tools.md](docs/tools.md)**.
+
+Order tools (`placeOrder`, `cancelOrder`) and account reads (`getOpenOrders`, `getHoldings`,
+`getBuyingPower`) are also available. **Orders are not transmitted by default** — the server
+switch `toss.trading.enabled=true`, the call argument `execute=true`, and the configured
+notional and daily-count limits must all allow it. See the [tool reference](docs/tools.md).
 
 ## ⚡ Caching & request coalescing
 
