@@ -22,7 +22,11 @@ spring:
         version: 0.1.0
         instructions: >-
           토스증권 공식 Open API(https://openapi.tossinvest.com) 기반 MCP 서버.
-          공식 API만 사용하며(비공식 WTS 미사용), 기본은 read-only 입니다.
+          공식 API만 사용합니다(비공식 WTS 미사용). 시세 조회 도구는 읽기 전용이고,
+          주문 도구는 기본적으로 꺼져 있어 서버 설정 toss.trading.enabled=true 이면서
+          호출에 execute=true 가 있어야만 실제로 전송됩니다. 그 밖에는 미리보기만 반환합니다.
+          HTTP 전송(/mcp)에는 인증이 없습니다 — 실매매가 켜져 있다면 localhost 밖으로
+          노출하지 마세요.
         stdio: true
 
 toss:
@@ -30,6 +34,13 @@ toss:
   client-id: ${TOSS_CLIENT_ID:}
   client-secret: ${TOSS_CLIENT_SECRET:}
   account: ${TOSS_ACCOUNT:}
+  # 실매매 안전장치. 기본은 꺼짐이며, 켜더라도 아래 한도를 넘는 주문은 거부된다.
+  trading:
+    enabled: ${TOSS_TRADING_ENABLED:false}
+    max-order-notional-krw: 100000
+    max-order-notional-usd: 100
+    daily-order-count: 20
+    symbol-allowlist: []
   cache:
     l2:
       enabled: ${TOSS_CACHE_L2:false}

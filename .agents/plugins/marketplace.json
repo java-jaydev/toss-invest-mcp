@@ -1,0 +1,13 @@
+{
+  "name": "toss-invest-mcp",
+  "plugins": [
+    {
+      "name": "toss-invest-mcp",
+      "description": "Bundles the split-buy-strategy skill for the Toss Securities Open API MCP server. Skill only — configure the MCP server itself with `codex mcp add` or ~/.codex/config.toml (see docs/install-plugins.md).",
+      "source": {
+        "source": "local",
+        "path": "./"
+      }
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "toss-invest-mcp",
+  "displayName": "Toss Invest MCP",
+  "version": "0.1.0",
+  "description": "MCP server for the Toss Securities Open API: read-only Korean/US market-data tools (always on) plus order/account tools (off by default, dry-run until explicitly enabled). Requires a one-time build with JDK 21 after install — see docs/install-plugins.md.",
+  "author": {
+    "name": "Jinkyu Lee"
+  },
+  "homepage": "https://github.com/java-jaydev/toss-invest-mcp",
+  "repository": "https://github.com/java-jaydev/toss-invest-mcp",
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "toss", "stock", "market-data", "trading"],
+  "userConfig": {
+    "toss_client_id": {
+      "type": "string",
+      "title": "Toss client ID",
+      "description": "Toss Securities Open API client ID, issued at openapi.tossinvest.com.",
+      "sensitive": true,
+      "required": true
+    },
+    "toss_client_secret": {
+      "type": "string",
+      "title": "Toss client secret",
+      "description": "Toss Securities Open API client secret, issued at openapi.tossinvest.com.",
+      "sensitive": true,
+      "required": true
+    },
+    "toss_account": {
+      "type": "string",
+      "title": "Toss account number",
+      "description": "Account serial number. Required only for the order/account tools (placeOrder, cancelOrder, getOpenOrders, getHoldings, getBuyingPower). Leave blank if you only use the market-data tools.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "mcpServers": {
+    "toss-invest": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "${CLAUDE_PLUGIN_ROOT}/build/libs/toss-invest-mcp-0.1.0.jar"
+      ],
+      "env": {
+        "TOSS_CLIENT_ID": "${user_config.toss_client_id}",
+        "TOSS_CLIENT_SECRET": "${user_config.toss_client_secret}",
+        "TOSS_ACCOUNT": "${user_config.toss_account}"
+      }
+    }
+  }
+}

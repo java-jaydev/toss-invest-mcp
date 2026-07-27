@@ -1,0 +1,14 @@
+{
+  "name": "toss-invest-mcp",
+  "version": "0.1.0",
+  "description": "Bundles the split-buy-strategy skill for the Toss Securities Open API MCP server (Korean/US market-data tools plus order/account tools, off by default). This manifest does not wire up the MCP server itself — that needs a local JDK 21 build and Toss credentials, which do not fit Codex's plugin distribution model safely. Configure the server with `codex mcp add` or ~/.codex/config.toml; see docs/install-plugins.md.",
+  "author": {
+    "name": "Jinkyu Lee",
+    "url": "https://github.com/java-jaydev"
+  },
+  "homepage": "https://github.com/java-jaydev/toss-invest-mcp",
+  "repository": "https://github.com/java-jaydev/toss-invest-mcp",
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "toss", "stock", "market-data", "trading"],
+  "skills": "./skills/"
+}

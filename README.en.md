@@ -9,7 +9,7 @@
 
 A **Model Context Protocol (MCP) server** that lets AI agents (Claude Code, Cursor, Codex, …) query **Korean and US stock-market data** through the official **Toss Securities Open API**.
 
-Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Read-only by default.
+Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Market data is always available; order transmission is off by default and must be explicitly enabled via configuration and a call argument.
 
 ---
 
@@ -24,10 +24,12 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 | Doc | What's inside |
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **Beginner guide** — set it up by *asking an AI to do it*, even if the terminal is new to you (Korean) |
-| [docs/tools.md](docs/tools.md) | 🧰 Full reference for all 5 tools + real request/response examples |
+| [docs/tools.md](docs/tools.md) | 🧰 Full reference for all 10 tools (5 market-data + 5 trading/account) + request/response examples |
+| [docs/install-plugins.md](docs/install-plugins.md) | 🔌 Install as a **plugin** for Claude Code or Codex CLI (build step, credentials, IP allowlist, enabling live trading — Korean) |
 | [README.md](README.md) | 🇰🇷 Korean version |
 | [llms.txt](llms.txt) | 🤖 Machine-readable index for LLMs |
 | [AGENTS.md](AGENTS.md) | 🛠️ Guide for AI coding agents working on this repo |
+| [skills/split-buy-strategy/SKILL.md](skills/split-buy-strategy/SKILL.md) | 📐 Split-buy (averaging-down) strategy skill — agent decision rules for trading (Korean) |
 
 ## ✨ Features
 
@@ -86,12 +88,27 @@ Add to your MCP config (`.mcp.json` or client settings). Make sure `java` resolv
 > ⚠️ **Java 21 runtime required.** The jar is class-file version 65; older JVMs fail immediately with
 > `UnsupportedClassVersionError`. Verify the `"command": "java"` in your MCP config points to a 21+ JVM.
 
+### 🔌 Installing as a plugin
+
+Both Claude Code and Codex CLI can install this repo from its bundled marketplace (e.g. `/plugin
+marketplace add java-jaydev/toss-invest-mcp`). That said, this server runs a Java build artifact
+(a jar), so **installing the plugin does not remove the build step above** — this is not marketed
+as zero-install. Credential handling, what's confirmed vs. unconfirmed on the Codex side, and how
+to deliberately enable live trading are all covered in the
+[plugin installation guide](docs/install-plugins.md) (Korean, with literal commands/config in
+English).
+
 ## 🔌 Transports
 
 One artifact serves both, selected by Spring profile.
 
 - **stdio (default)** — for local MCP clients. `./gradlew bootRun`, no profile needed.
 - **Streamable HTTP** — for remote / multi-client / load testing. Serves MCP spec 2025-03-26 at `/mcp`, requests handled on **Java 21 virtual threads**. `./gradlew bootRun --args='--spring.profiles.active=http'` (default port 8080).
+
+> ⚠️ **The HTTP transport has no authentication.** The `/mcp` endpoint has no auth layer of its
+> own — anyone who can reach that port can call any tool. If you run the http profile while live
+> trading is enabled (`toss.trading.enabled=true`), **bind it to localhost only or put it behind
+> a trusted network** — exposed to the open internet, anyone can place real orders with no login.
 
 ## 🧰 Tools at a glance
 
@@ -105,9 +122,21 @@ One artifact serves both, selected by Spring profile.
 
 → Real request/response examples in **[docs/tools.md](docs/tools.md)**.
 
+Order tools (`placeOrder`, `cancelOrder`) and account reads (`getOpenOrders`, `getHoldings`,
+`getBuyingPower`) are also available. **Orders are not transmitted by default** — the server
+switch `toss.trading.enabled=true`, the call argument `execute=true`, and the configured
+notional and daily-count limits must all allow it. `toss.trading.enabled` can also be flipped
+with the `TOSS_TRADING_ENABLED=true` environment variable — the jar ships with it hard-coded to
+`false`, so for most users running the stdio transport, that environment variable is effectively
+the only kill switch. **Toss Securities provides no sandbox or paper-trading environment, so
+once live trading is enabled every call hits a real, funded account.** For a strategy that splits
+buys across several price levels by rule, see the
+[split-buy strategy skill](skills/split-buy-strategy/SKILL.md) (Korean). See the
+[tool reference](docs/tools.md) for full details.
+
 ## ⚡ Caching & request coalescing
 
-Read-only calls pass through a cache, so identical-request bursts collapse to one upstream call and slow-changing data is not re-fetched every time.
+Market-data calls pass through a cache, so identical-request bursts collapse to one upstream call and slow-changing data is not re-fetched every time. Order and account tools are never cached — see [Caching behavior](docs/tools.md#캐시-동작--caching-behavior) in the tool reference.
 
 - **L1 — Caffeine `AsyncCache` (in-process):** concurrent identical requests share one in-flight future (single-flight). Loading runs off the map's monitor on a virtual thread, so blocking I/O never pins a JDK 21 carrier. Per-type TTL means a single node caches correctly **without Redis**.
 - **Per-type TTLs:** quotes/orderbook 2s, trades 3s, intraday candles 10s, daily candles 1h, stock info 6h.

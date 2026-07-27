@@ -77,6 +77,22 @@ class HttpTransportIT {
                 .contains("getPrices", "getOrderbook", "getTrades", "getCandles", "getStocks");
     }
 
+    /**
+     * TradingToolsTest#allFiveToolsAreRegistered 는 TradingTools 를 직접 생성해서 검증하므로
+     * 실제 tossTools 빈(TossMcpApplication)을 우회한다. 여기서는 실제 스프링 컨텍스트를 띄워
+     * MCP 전송으로 노출되는 도구 목록을 직접 확인한다 — toolObjects(...) 에서 tradingTools 가
+     * 조용히 빠지면(머지 충돌·리팩터링) 이 테스트가 잡는다.
+     */
+    @Test
+    void allFiveTradingToolsAreExposed() {
+        client.initialize();
+
+        McpSchema.ListToolsResult tools = client.listTools();
+
+        assertThat(tools.tools()).extracting(McpSchema.Tool::name)
+                .contains("placeOrder", "cancelOrder", "getOpenOrders", "getHoldings", "getBuyingPower");
+    }
+
     @Test
     void toolCallRoundTripsThroughCacheToStubbedApi() {
         client.initialize();
