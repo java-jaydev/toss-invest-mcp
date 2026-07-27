@@ -302,4 +302,37 @@ class CliCommandTest {
         assertThat(exitCode).isZero();
         verify(trading).cancelOrder("order-1", true);
     }
+
+    // ---- CliRunner: --spring.* 인자는 picocli 로 넘어가기 전에 걸러져야 한다 ----
+    // (실제 실행은 `java -jar ... --spring.profiles.active=cli <명령>` 형태이므로,
+    // 이 인자가 그대로 picocli 에 들어가면 "Unknown option" 으로 항상 실패한다.)
+
+    @Test
+    void filterSpringArgsDropsSpringPrefixedArguments() {
+        String[] filtered = CliRunner.filterSpringArgs(
+                new String[] {"--spring.profiles.active=cli", "price", "005930"});
+
+        assertThat(filtered).containsExactly("price", "005930");
+    }
+
+    @Test
+    void filterSpringArgsKeepsOwnOptionsUntouched() {
+        String[] filtered = CliRunner.filterSpringArgs(
+                new String[] {"--spring.profiles.active=cli", "order", "buy", "005930",
+                        "--qty", "1", "--type", "limit", "--price", "50000", "--execute"});
+
+        assertThat(filtered).containsExactly(
+                "order", "buy", "005930", "--qty", "1", "--type", "limit", "--price", "50000", "--execute");
+    }
+
+    @Test
+    void cliRunnerExecuteIgnoresTheSpringProfileArgumentAndDelegates() {
+        when(market.prices("005930")).thenReturn("{\"result\":[]}");
+        CliRunner runner = new CliRunner(market, trading);
+
+        int exitCode = runner.execute("--spring.profiles.active=cli", "price", "005930");
+
+        assertThat(exitCode).isZero();
+        verify(market).prices("005930");
+    }
 }
