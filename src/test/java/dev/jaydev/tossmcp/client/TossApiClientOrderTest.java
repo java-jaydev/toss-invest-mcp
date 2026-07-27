@@ -85,17 +85,22 @@ class TossApiClientOrderTest {
         RecordedRequest request = server.takeRequest();
         assertThat(request.getMethod()).isEqualTo("GET");
         assertThat(request.getPath()).isEqualTo("/api/v1/orders?status=OPEN");
+        assertThat(request.getHeader("X-Tossinvest-Account")).isEqualTo("42");
     }
 
     @Test
     void getHoldingsAndBuyingPowerUseTheirOwnPaths() throws Exception {
         enqueueJson("{\"result\":{}}");
         clientWithAccount("42").getHoldings(null);
-        assertThat(server.takeRequest().getPath()).isEqualTo("/api/v1/holdings");
+        RecordedRequest holdingsRequest = server.takeRequest();
+        assertThat(holdingsRequest.getPath()).isEqualTo("/api/v1/holdings");
+        assertThat(holdingsRequest.getHeader("X-Tossinvest-Account")).isEqualTo("42");
 
         enqueueJson("{\"result\":{}}");
         clientWithAccount("42").getBuyingPower("KRW");
-        assertThat(server.takeRequest().getPath()).isEqualTo("/api/v1/buying-power?currency=KRW");
+        RecordedRequest buyingPowerRequest = server.takeRequest();
+        assertThat(buyingPowerRequest.getPath()).isEqualTo("/api/v1/buying-power?currency=KRW");
+        assertThat(buyingPowerRequest.getHeader("X-Tossinvest-Account")).isEqualTo("42");
     }
 
     @Test
