@@ -34,17 +34,35 @@
 - 국내(KRX)와 미국 주식 모두 지원하며 매수여력은 KRW·USD 양쪽으로 관리된다.
 - 에러 응답 형태: `{"error":{"requestId","code","message","data"}}`.
 
-구현 시점에 필드명·enum 값은 라이브 `openapi.json`으로 재검증한다(추측 금지).
+라이브 `openapi.json`을 직접 파싱해 확인한 주문 관련 사실(2026-07-27):
+
+- **`clientOrderId`가 멱등성 키다.** 주문 생성 요청에 넣으면 **10분간** 같은 값으로 재요청 시
+  새 주문을 만들지 않고 이전 주문 결과를 그대로 재반환한다. 서버가 자동 생성하지 않으므로
+  클라이언트가 넣어야 한다(최대 36자, 영숫자와 `-`, `_`).
+- **`confirmHighValueOrder`(기본 false)** — 1억원 이상 주문은 이 값이 `true`가 아니면
+  토스가 `400 confirm-high-value-required`로 거부한다. 토스 자체의 착오주문 방지 장치다.
+- 주문 생성 본문은 **수량 기반**(`quantity` 필수)과 **금액 기반**(`orderAmount` 필수) 중 하나다.
+  공통 필수: `symbol`, `side`(BUY/SELL), `orderType`(LIMIT/MARKET).
+  `price`는 `LIMIT`일 때 필수이고 `MARKET`일 때 전달하면 오류다.
+  `timeInForce`는 미전달 시 `DAY`.
+- 수량은 문자열 십진수다. 소수점 수량은 **미국 주식 시장가 매도**에만 허용된다.
+- 취소 응답은 `{orderId}`인데 이는 **취소로 새로 발급된 주문 식별자**이며 원주문 번호와 다르다.
+- `GET /api/v1/orders`는 `status`(OPEN/CLOSED)가 **필수** 쿼리다.
+  `GET /api/v1/buying-power`는 `currency`가 **필수** 쿼리다.
+
+구현 중 추가로 필요한 필드는 라이브 `openapi.json`으로 재검증한다(추측 금지).
 
 ## 도구 세트 (5종)
 
 | MCP 도구 | 토스 엔드포인트 | 성격 |
 |---|---|---|
 | `placeOrder` | `POST /api/v1/orders` | 쓰기 (게이트 필수) |
-| `cancelOrder` | `DELETE /api/v1/orders/{orderId}` | 쓰기 (게이트 필수) |
-| `getOpenOrders` | `GET /api/v1/order-history` | 읽기 |
-| `getHoldings` | `GET /api/v1/assets` | 읽기 |
-| `getBuyingPower` | `GET /api/v1/order-info` | 읽기 |
+| `cancelOrder` | `POST /api/v1/orders/{orderId}/cancel` | 쓰기 (게이트 필수) |
+| `getOpenOrders` | `GET /api/v1/orders?status=OPEN` | 읽기 |
+| `getHoldings` | `GET /api/v1/holdings` | 읽기 |
+| `getBuyingPower` | `GET /api/v1/buying-power?currency=…` | 읽기 |
+
+다섯 엔드포인트 모두 `X-Tossinvest-Account` 헤더가 **필수**다(스펙의 `AccountSeq` 공통 파라미터).
 
 `placeOrder` 파라미터: `symbol`(필수), `side`(buy/sell, 필수), `quantity`(필수),
 `orderType`(limit/market, 필수), `price`(지정가일 때 필수), `execute`(기본 false).
@@ -95,11 +113,15 @@
 ### 판정 순서
 
 ```
-1. 킬스위치     toss.trading.enabled == false  →  강제 DRY_RUN (실행하지 않음)
-2. 가드레일     한도 위반                       →  REJECT(사유)  ← execute=true여도 통과 못 함
+1. 가드레일     한도 위반                       →  REJECT(사유)  ← 어떤 상태에서도 통과 못 함
+2. 킬스위치     toss.trading.enabled == false  →  DRY_RUN (실행하지 않음)
 3. 실행 플래그  execute != true                →  DRY_RUN (미리보기)
    전부 통과                                   →  ALLOW → 실제 전송
 ```
+
+**가드레일을 먼저 평가하는 이유:** 킬스위치를 먼저 보고 곧장 DRY_RUN을 반환하면, 한도를 넘는
+주문도 미리보기에서는 "이렇게 주문됩니다"로 보인다. 나중에 실매매를 켠 순간 거부당해야
+비로소 문제를 알게 된다. 한도 위반은 상태와 무관하게 항상 REJECT로 드러나야 한다.
 
 세 게이트는 역할이 다르며, 각각이 막는 대상을 정직하게 구분한다:
 
@@ -138,14 +160,16 @@
 
 ```yaml
 toss:
+  account: ${TOSS_ACCOUNT:}        # 기존 설정을 재사용한다(계좌 일련번호). 미설정 시 주문 도구는 명확히 실패
   trading:
     enabled: false                 # 킬스위치
-    account-seq: ${TOSS_ACCOUNT:}  # 미설정 시 주문 도구는 명확히 실패
     max-order-notional-krw: 100000
     max-order-notional-usd: 100
     daily-order-count: 20
     symbol-allowlist: []
 ```
+
+계좌 설정은 이미 `TossProperties.account()`로 존재하므로 새로 만들지 않고 재사용한다.
 
 ## 데이터 흐름과 규칙
 
@@ -174,18 +198,27 @@ toss:
 않은 상태를 보고 잘못 판단한다(같은 주문을 두 번 내는 등). 따라서 이 세 도구는
 `MarketDataCache`를 거치지 않고 매번 조회한다. 이들 역시 `X-Tossinvest-Account` 헤더가 필요하다.
 
-### 절대 규칙: 쓰기는 자동 재시도하지 않는다
+### 절대 규칙: 쓰기는 자동 재시도하지 않는다 (그리고 항상 멱등성 키를 보낸다)
 
-`POST /orders` 호출이 타임아웃되면 주문이 접수됐는지 알 수 없다. 이때 재시도하면
-이중 주문이 된다. 따라서 **쓰기 경로에는 재시도 로직을 넣지 않는다.**
-타임아웃/불확실 상황에서는 `status = UNKNOWN`으로 반환하고, 응답 메시지에
-"`getOpenOrders`로 실제 접수 여부를 확인하라"고 명시한다. 읽기 도구의 재시도 정책과는
-의도적으로 다르다.
+`POST /orders` 호출이 타임아웃되면 주문이 접수됐는지 알 수 없다. 이때 맹목적으로 재시도하면
+이중 주문이 된다. 따라서 **쓰기 경로에는 자동 재시도 로직을 넣지 않는다.**
+
+대신 토스가 제공하는 멱등성 장치를 반드시 사용한다: 모든 주문 생성 요청에
+**`clientOrderId`를 생성해 함께 보내고, 그 값을 `OrderResult`에 담아 돌려준다.**
+타임아웃 시에는 `status = UNKNOWN`으로 반환하면서 (a) `getOpenOrders`로 접수 여부를 확인하거나
+(b) **같은 `clientOrderId`로 10분 안에 다시 시도하면 중복 주문 없이 이전 결과를 받는다**는 점을
+사유 메시지에 명시한다. 재시도 여부의 판단은 두뇌가 하고, 재시도가 안전하도록 만드는 것이
+이 서버의 책임이다.
+
+**`confirmHighValueOrder`는 절대 자동으로 `true`로 보내지 않는다.** 1억원 이상 주문을 토스가
+막아주는 장치인데, 우리가 자동으로 켜면 그 보호가 사라진다. 이 값을 보내지 않음으로써
+고액 주문은 토스 쪽에서 한 번 더 걸린다(우리 가드레일과 독립적인 추가 안전망).
 
 ### 레이트리밋
 
 쓰기 경로 전용 리미터를 둔다. 기본 6 req/s, `09:00–09:10 KST`에는 3 req/s.
-짧은 한도 내에서는 대기 후 진행하고, 대기로 해결되지 않으면 REJECT하며 사유를 알린다.
+한도를 넘으면 **대기하지 않고 즉시 REJECT**하며 사유를 알린다. 도구 호출 안에서 잠드는 것은
+호출자를 영문 모르게 붙잡아두는 것이라, 곧바로 거부하고 두뇌가 다시 시도하게 하는 편이 낫다.
 시각 판단은 주입된 `Clock`을 사용해 테스트 가능하게 한다.
 
 ### 응답 형태
