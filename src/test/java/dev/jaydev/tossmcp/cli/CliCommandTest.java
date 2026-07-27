@@ -312,6 +312,30 @@ class CliCommandTest {
         verify(trading).cancelOrder("order-1", true);
     }
 
+    @Test
+    void cancelRejectedByTheCoreExitsWithCodeOne() {
+        when(trading.cancelOrder(eq("order-1"), eq(true)))
+                .thenReturn(new OrderResult(Status.REJECTED, "토스가 취소를 거부했습니다: 이미 체결됨 (E001)",
+                        null, List.of(), "order-1", null));
+
+        int exitCode = execute("cancel", "order-1", "--execute");
+
+        assertThat(exitCode).isEqualTo(1);
+        assertThat(out.toString()).contains("status: REJECTED").contains("이미 체결됨");
+    }
+
+    @Test
+    void cancelUnknownFromTheCoreExitsWithCodeTwo() {
+        when(trading.cancelOrder(eq("order-1"), eq(true)))
+                .thenReturn(new OrderResult(Status.UNKNOWN,
+                        "응답을 받지 못해 취소 접수 여부를 알 수 없습니다.", null, List.of(), "order-1", null));
+
+        int exitCode = execute("cancel", "order-1", "--execute");
+
+        assertThat(exitCode).isEqualTo(2);
+        assertThat(out.toString()).contains("status: UNKNOWN").contains("응답을 받지 못해");
+    }
+
     // ---- CliRunner: --spring.* 인자는 picocli 로 넘어가기 전에 걸러져야 한다 ----
     // (실제 실행은 `java -jar ... --spring.profiles.active=cli <명령>` 형태이므로,
     // 이 인자가 그대로 picocli 에 들어가면 "Unknown option" 으로 항상 실패한다.)

@@ -44,7 +44,14 @@ public class CliRunner implements CommandLineRunner {
         return cli.execute(filterSpringArgs(args));
     }
 
-    /** 스프링이 소비하는 {@code --spring.*} 인자를 picocli 파싱 전에 제거한다. */
+    /**
+     * 스프링이 소비하는 {@code --spring.*} 인자를 picocli 파싱 전에 제거한다.
+     *
+     * <p>제약: 접두사만 보고 무조건 버린다. 지금은 우리 명령 표면에 {@code --spring.}으로
+     * 시작하는 옵션·값이 없어 안전하지만, 나중에 그런 옵션 이름이나 사용자 입력값(예: 주문
+     * 가격·심볼에 우연히 이 문자열이 들어가는 경우)이 생기면 이 필터가 조용히 지워버린다.
+     * 새 옵션을 추가할 때는 이 이름 충돌 가능성을 반드시 확인할 것.
+     */
     static String[] filterSpringArgs(String[] args) {
         return Arrays.stream(args)
                 .filter(arg -> !arg.startsWith("--spring."))
