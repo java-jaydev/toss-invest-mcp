@@ -7,9 +7,9 @@
 
 [🇰🇷 한국어](README.md) · **🇬🇧 English**
 
-A **Model Context Protocol (MCP) server** that lets AI agents (Claude Code, Cursor, Codex, …) query **Korean and US stock-market data** through the official **Toss Securities Open API**.
+A **Model Context Protocol (MCP) server** that lets AI agents (Claude Code, Cursor, Codex, …) query **Korean and US stock-market data** — and, once the safety gates are deliberately opened, **place orders** — through the official **Toss Securities Open API**. A **command-line mode** over the same core is included for use without an AI.
 
-Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Market data is always available; order transmission is off by default and must be explicitly enabled via configuration and a call argument.
+Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unofficial WTS scraping). Market data is always available; **orders are off by default** — the server switch and the call argument must both be on, and the configured notional and daily-count limits must allow it.
 
 ---
 
@@ -17,7 +17,8 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 
 - **MCP** is a standard for how AI reaches external tools and data — think USB-C for AI.
 - Connect this server to an agent, ask *"what's Samsung's current price?"*, and it answers with **real quotes**.
-- AI reasons well but can't see live market data. This server is its eyes.
+- AI reasons well but can't see live market data. This server is its **eyes**.
+- And only when you explicitly open the gates, its **hands** too — orders, cancellations, balances. Otherwise it returns a preview of what *would* have been sent.
 
 ## 🧭 Documentation map
 
@@ -35,7 +36,11 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 ## ✨ Features
 
 - ✅ **5 read-only market-data tools** — `getPrices` (quotes, up to 200 symbols), `getOrderbook`, `getTrades`, `getCandles` (1m/1d), `getStocks` (instrument info). Parameters verified against the official OpenAPI spec.
+- 🛑 **5 order/account tools (off by default)** — `placeOrder`, `cancelOrder`, `getOpenOrders`, `getHoldings`, `getBuyingPower`. An order transmits only after clearing **three gates** ([details](#-tools-at-a-glance))
 - 🌏 **Korea and US in one tool** — Korea uses 6-digit codes (`005930`, KRW), US uses tickers (`AAPL`, USD). The same tool handles both.
+- 💻 **CLI mode** — `./toss price 005930`, no AI required. It runs the same core, so the same safety gates apply ([details](docs/cli.md))
+- 📐 **Bundled strategy skill** — averaging-down decision rules as a skill the agent reads. **The server holds no strategy** ([details](skills/split-buy-strategy/SKILL.md))
+- 🔌 **Plugin distribution** — installable via the Claude Code and Codex CLI marketplaces ([details](docs/install-plugins.md))
 - 🔒 OAuth2 token auto-issue, caching & refresh
 - 🔑 Secrets via environment variables only (never committed)
 - ⚡ **Two-tier cache + request coalescing** — bursts of identical requests collapse to at most one upstream call ([details](#-caching--request-coalescing))
@@ -129,11 +134,15 @@ table, exit codes, credentials, and how to deliberately enable live trading and 
 | `getTrades` | Recent trades | `symbol`, `count` |
 | `getCandles` | OHLC candles | `symbol`, `interval` (1m/1d), `count` |
 | `getStocks` | Instrument info | `symbols` (comma, ≤200) |
+| `placeOrder` 🛑 | Place an order (previews by default) | `symbol`, `side`, `quantity`, `orderType`, `price`, `execute` |
+| `cancelOrder` 🛑 | Cancel an order (previews by default) | `orderId`, `execute` |
+| `getOpenOrders` | Unfilled orders | `symbol`, `limit` |
+| `getHoldings` | Positions and unrealized P&L | `symbol` |
+| `getBuyingPower` | Available buying power | `currency` (KRW/USD) |
 
 → Real request/response examples in **[docs/tools.md](docs/tools.md)**.
 
-Order tools (`placeOrder`, `cancelOrder`) and account reads (`getOpenOrders`, `getHoldings`,
-`getBuyingPower`) are also available. **Orders are not transmitted by default** — the server
+Only the two tools marked 🛑 change the account. **Orders are not transmitted by default** — the server
 switch `toss.trading.enabled=true`, the call argument `execute=true`, and the configured
 notional and daily-count limits must all allow it. `toss.trading.enabled` can also be flipped
 with the `TOSS_TRADING_ENABLED=true` environment variable — the jar ships with it hard-coded to
