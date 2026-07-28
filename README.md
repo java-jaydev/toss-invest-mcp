@@ -7,9 +7,9 @@
 
 **🇰🇷 한국어** · [🇬🇧 English](README.en.md)
 
-AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open API**로 **한국·미국 주식 시세**를 조회하게 해주는 **MCP(Model Context Protocol) 서버**입니다.
+AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open API**로 **한국·미국 주식 시세를 조회하고, 안전장치를 통과했을 때 주문까지 낼 수 있게** 해주는 **MCP(Model Context Protocol) 서버**입니다. AI 없이 터미널에서 쓰는 **CLI 모드**도 같은 코어 위에서 제공합니다.
 
-**Java 21 + Spring Boot + Spring AI**로 만들었습니다. 공식 API만 사용합니다(비공식 WTS 미사용). 시세 조회는 항상 가능하고, 주문 전송은 기본적으로 꺼져 있습니다(설정과 호출 인자로 명시적으로 켜야 합니다).
+**Java 21 + Spring Boot + Spring AI**로 만들었습니다. 공식 API만 사용합니다(비공식 WTS 미사용). 시세 조회는 항상 가능하고, **주문 전송은 기본적으로 꺼져 있습니다** — 서버 설정과 호출 인자를 모두 켜고, 설정한 금액·횟수 한도를 통과해야만 나갑니다.
 
 ---
 
@@ -17,7 +17,8 @@ AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open AP
 
 - **MCP**는 AI가 외부 도구·데이터에 접근하는 표준 규격입니다. USB-C 같은 거라고 보면 됩니다.
 - 이 서버를 AI 에이전트에 연결하면, 에이전트에게 *"삼성전자 현재가 알려줘"* 라고 물었을 때 **실제 시세**로 답합니다.
-- AI는 똑똑하지만 실시간 시세는 못 봅니다. 이 서버가 그 눈이 되어줍니다.
+- AI는 똑똑하지만 실시간 시세는 못 봅니다. 이 서버가 그 **눈**이 되어줍니다.
+- 그리고 안전장치를 명시적으로 열었을 때만, **손**도 되어줍니다 — 주문·취소·잔고 조회까지. 열지 않으면 "이렇게 주문될 예정"이라는 미리보기만 돌려줍니다.
 
 ## 🧭 문서 안내 (여기서 원하는 곳으로)
 
@@ -35,9 +36,12 @@ AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open AP
 ## ✨ 기능
 
 - ✅ **시세 조회 5종(읽기 전용)** — `getPrices`(현재가, 최대 200종목), `getOrderbook`(호가), `getTrades`(체결), `getCandles`(1분/1일 봉), `getStocks`(종목정보). 파라미터는 공식 OpenAPI 스펙으로 검증했습니다.
+- 🛑 **주문·계좌 5종(기본 꺼짐)** — `placeOrder`(주문), `cancelOrder`(취소), `getOpenOrders`(미체결), `getHoldings`(보유), `getBuyingPower`(매수여력). **3중 게이트**를 모두 통과해야만 전송됩니다 ([자세히](#-도구-요약))
 - 🌏 **국내·해외 동시 지원** — 국내는 6자리 코드(예: `005930`, 원), 미국은 티커(예: `AAPL`, 달러). 같은 도구가 둘 다 처리합니다.
-- 🔒 OAuth2 토큰 자동 발급·캐시·갱신
-- 🔑 시크릿은 환경변수로만(코드에 절대 안 넣음)
+- 💻 **CLI 모드** — AI 없이 터미널에서 `./toss price 005930`. 같은 코어를 쓰므로 안전장치도 동일하게 적용됩니다 ([자세히](docs/cli.md))
+- 📐 **전략 스킬 번들** — 분할매수 판단 규칙을 에이전트가 읽는 스킬로 제공. **서버에는 전략이 없습니다** ([자세히](skills/split-buy-strategy/SKILL.md))
+- 🔌 **플러그인 배포** — Claude Code·Codex CLI 마켓플레이스로 설치 ([자세히](docs/install-plugins.md))
+- 🔒 OAuth2 토큰 자동 발급·캐시·갱신 / 🔑 시크릿은 환경변수로만(코드에 절대 안 넣음)
 - ⚡ **2계층 캐시 + 요청병합** — 같은 요청이 몰려도 상단(토스 API)은 한 번만 호출 ([자세히](#-캐시--요청병합))
 - 📊 **관측성** — `/actuator/prometheus`로 캐시 오프로드·처리량 지표 노출 ([자세히](#-관측성--부하테스트))
 
@@ -131,11 +135,15 @@ java-jaydev/toss-invest-mcp` 등). 다만 이 서버는 Java 빌드 결과물(ja
 | `getTrades` | 최근 체결 | `symbol`, `count` |
 | `getCandles` | 캔들(시고저종) | `symbol`, `interval`(1m/1d), `count` |
 | `getStocks` | 종목 기본정보 | `symbols`(콤마, 최대 200) |
+| `placeOrder` 🛑 | 주문(기본 미리보기) | `symbol`, `side`, `quantity`, `orderType`, `price`, `execute` |
+| `cancelOrder` 🛑 | 주문 취소(기본 미리보기) | `orderId`, `execute` |
+| `getOpenOrders` | 미체결 주문 | `symbol`, `limit` |
+| `getHoldings` | 보유 주식·평가손익 | `symbol` |
+| `getBuyingPower` | 매수 가능 금액 | `currency`(KRW/USD) |
 
 → 요청/응답 실제 예시는 **[docs/tools.md](docs/tools.md)** 참고.
 
-주문 도구(`placeOrder`·`cancelOrder`)와 계좌 조회 도구(`getOpenOrders`·`getHoldings`·`getBuyingPower`)도
-제공합니다. **주문은 기본적으로 전송되지 않습니다** — 서버 설정 `toss.trading.enabled=true` 와
+🛑 표시된 두 도구만 계좌를 바꿉니다. **주문은 기본적으로 전송되지 않습니다** — 서버 설정 `toss.trading.enabled=true` 와
 호출 인자 `execute=true` 가 모두 있어야 하고, 설정된 금액·횟수 한도 안이어야 합니다.
 `toss.trading.enabled`는 환경변수 `TOSS_TRADING_ENABLED=true`로도 켤 수 있습니다 — jar에는
 `false`로 고정 패키징되어 있으므로, stdio로 실행하는 대부분의 사용자에게는 이 환경변수가
