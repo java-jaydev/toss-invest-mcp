@@ -25,6 +25,7 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 | Doc | What's inside |
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **Beginner guide** — set it up by *asking an AI to do it*, even if the terminal is new to you (Korean) |
+| **[docs/SAFETY.md](docs/SAFETY.md)** | 🛡️ **Safety-boundary design** — where the agent is allowed to act, what happens when the response never comes back, and what was deliberately *not* implemented |
 | [docs/tools.md](docs/tools.md) | 🧰 Full reference for all 10 tools (5 market-data + 5 trading/account) + request/response examples |
 | [docs/cli.md](docs/cli.md) | 💻 **CLI mode for using this without an AI agent** — command table, exit codes, credentials/IP allowlist, enabling live trading (Korean, with literal commands/flags in English) |
 | [docs/install-plugins.md](docs/install-plugins.md) | 🔌 Install as a **plugin** for Claude Code or Codex CLI (build step, credentials, IP allowlist, enabling live trading — Korean) |
@@ -36,6 +37,7 @@ Built with **Java 21 + Spring Boot + Spring AI**. Official API only (no unoffici
 ## ✨ Features
 
 - ✅ **5 read-only market-data tools** — `getPrices` (quotes, up to 200 symbols), `getOrderbook`, `getTrades`, `getCandles` (1m/1d), `getStocks` (instrument info). Parameters verified against the official OpenAPI spec.
+- 🛡️ **Documented safety boundary** — guardrail ordering, `UNKNOWN` as a first-class status, idempotency keys, and the protections deliberately left alone ([details](docs/SAFETY.md))
 - 🛑 **5 order/account tools (off by default)** — `placeOrder`, `cancelOrder`, `getOpenOrders`, `getHoldings`, `getBuyingPower`. An order transmits only after clearing **three gates** ([details](#-tools-at-a-glance))
 - 🌏 **Korea and US in one tool** — Korea uses 6-digit codes (`005930`, KRW), US uses tickers (`AAPL`, USD). The same tool handles both.
 - 💻 **CLI mode** — `./toss price 005930`, no AI required. It runs the same core, so the same safety gates apply ([details](docs/cli.md))
