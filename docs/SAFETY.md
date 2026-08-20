@@ -22,29 +22,9 @@ Everything below follows from those three.
 
 ## The path an order takes
 
-```mermaid
-flowchart TD
-    A[Agent calls place_order] --> B[Validate input]
-    B -- invalid --> R1[REJECTED]
-    B -- ok --> C[Estimate notional from live quote]
-    C --> D{Guardrails}
-    D -- notional unknown --> R2[REJECTED<br/>cannot verify a limit we cannot compute]
-    D -- unknown currency --> R2
-    D -- over per-order cap --> R2
-    D -- daily count reached --> R2
-    D -- symbol not allowlisted --> R2
-    D -- all pass --> E{Kill switch<br/>toss.trading.enabled}
-    E -- false --> P1[DRY_RUN<br/>shows what would happen]
-    E -- true --> F{execute flag}
-    F -- not true --> P1
-    F -- true --> G{Rate limit<br/>6/s, 3/s at market open}
-    G -- exceeded --> R3[REJECTED immediately<br/>no sleeping inside the call]
-    G -- ok --> H[Increment daily counter FIRST]
-    H --> I[POST order with clientOrderId]
-    I -- 2xx --> S1[PLACED]
-    I -- 4xx/5xx --> S2[REJECTED]
-    I -- no response --> S3[UNKNOWN<br/>with recovery instructions]
-```
+![The path an order takes — every gate, and where each one sends you](img/order-path.png)
+
+<sub>Diagrams are generated from [`docs/img/make-diagrams.py`](img/make-diagrams.py); SVG sources sit alongside the PNGs.</sub>
 
 **Read the order of the diamonds.** Guardrails are evaluated **before** the kill switch, not after. That ordering is deliberate and it is the first design decision worth explaining.
 
@@ -93,20 +73,7 @@ Counting first can overcount. Overcounting stops you early. Undercounting lets y
 
 Most clients collapse a network failure into failure. That is a lie when the write may have landed.
 
-```mermaid
-stateDiagram-v2
-    [*] --> DRY_RUN: gates closed
-    [*] --> REJECTED: guardrail or broker refused
-    [*] --> PLACED: 2xx received
-    [*] --> UNKNOWN: no response
-    UNKNOWN --> PLACED: retry same clientOrderId within 10 min
-    UNKNOWN --> REJECTED: retry resolves to a refusal
-    note right of UNKNOWN
-        The order may or may not exist.
-        Never reported as success.
-        Never reported as failure.
-    end note
-```
+![Four outcomes an order tool can return, and the recovery path out of UNKNOWN](img/order-states.png)
 
 `UNKNOWN` carries the recovery path in the message itself — check open orders, **or retry with the same `clientOrderId` within 10 minutes and receive the same outcome without placing a second order.**
 
