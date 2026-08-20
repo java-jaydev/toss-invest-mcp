@@ -25,6 +25,7 @@ AI 에이전트(Claude Code, Cursor, Codex …)가 **토스증권 공식 Open AP
 | 문서 | 내용 |
 |---|---|
 | **[docs/vibe-coding.md](docs/vibe-coding.md)** | 🌱 **비개발자용 초친절 가이드** — 터미널이 낯설어도 AI에게 부탁해서 세팅하는 법 |
+| **[docs/SAFETY.md](docs/SAFETY.md)** | 🛡️ **안전 경계 설계** — 에이전트에게 어디까지 허용하고 어디서 막는지, 응답을 못 받았을 때 무엇을 하는지, 그리고 일부러 넣지 않은 것 (영문) |
 | [docs/tools.md](docs/tools.md) | 🧰 도구 10개(시세 조회 5 + 주문·계좌 5) 상세 레퍼런스 + 요청/응답 예시 |
 | [docs/cli.md](docs/cli.md) | 💻 **AI 없이 터미널에서 쓰는 CLI 모드** — 명령 표·종료 코드·자격증명/IP 허용목록·실매매 활성화 |
 | [docs/install-plugins.md](docs/install-plugins.md) | 🔌 Claude Code·Codex CLI **플러그인/마켓플레이스**로 설치하기(빌드 단계·자격증명·IP 허용목록·실매매 활성화 포함) |
